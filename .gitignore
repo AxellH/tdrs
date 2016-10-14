@@ -27,3 +27,22 @@
 *.exe
 *.out
 *.app
+
+# Other stuff
+/tdrs.sublime-workspace
+*.dSYM
+.DS_Store
+autom4te.cache
+/build-aux
+aclocal.m4
+/config.h
+/config.h.in
+/config.log
+/config.status
+/configure
+/Makefile
+/Makefile.in
+/stamp-h1
+/tdrs
+.deps
+.dirstamp

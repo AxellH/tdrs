@@ -65,7 +65,7 @@ namespace tdrs {
 	 */
 	void *Hub::_chainClient(void *chainClientParams) {
 		_chainClientParams *params = static_cast<_chainClientParams*>(chainClientParams);
-		std::vector<std::string> &sharedMessageVector = *params->shmsgvec;
+		std::vector<_sharedMessageEntry> &sharedMessageVector = *params->shmsgvec;
 
 		std::cout << "Chain[" << params->link << "]: Starting ..." << std::endl;
 		zmq::context_t zmqContext(1);
@@ -110,8 +110,19 @@ namespace tdrs {
 			std::cout << "Chain[" << params->link << "]: Checking hashed message in shared message vector ..." << std::endl;
 			bool processMessage = true;
 			pthread_mutex_lock(params->shmsgvecmtx);
-			if(std::find(sharedMessageVector.begin(), sharedMessageVector.end(), hashedMessage) != sharedMessageVector.end()) {
-				sharedMessageVector.erase(std::remove(sharedMessageVector.begin(), sharedMessageVector.end(), hashedMessage), sharedMessageVector.end());
+			if(std::find_if(
+					sharedMessageVector.begin(),
+					sharedMessageVector.end(),
+					(boost::bind(&_sharedMessageEntry::hash, _1) == hashedMessage
+						&& boost::bind(&_sharedMessageEntry::link, _1) == params->link)
+				) != sharedMessageVector.end()) {
+				sharedMessageVector.erase(
+					std::remove_if(
+						sharedMessageVector.begin(),
+						sharedMessageVector.end(),
+						(boost::bind(&_sharedMessageEntry::hash, _1) == hashedMessage
+							&& boost::bind(&_sharedMessageEntry::link, _1) == params->link)
+					), sharedMessageVector.end());
 				processMessage = false;
 			}
 			pthread_mutex_unlock(params->shmsgvecmtx);
@@ -309,7 +320,14 @@ namespace tdrs {
 
 			std::cout << "Hub: Adding hashed message to shared message vector ..." << std::endl;
 			pthread_mutex_lock(&_sharedMessageVectorMutex);
-			_sharedMessageVector.push_back(hashedMessage);
+			BOOST_FOREACH(_chainClientThread client, _chainClientThreads) {
+				_sharedMessageEntry entry;
+				entry.hash = hashedMessage;
+				entry.link = client.params->link;
+
+				_sharedMessageVector.push_back(entry);
+				std::cout << "Hub: Hash for " << client.params->link << " added to shared message vector." << std::endl;
+			}
 			pthread_mutex_unlock(&_sharedMessageVectorMutex);
 			std::cout << "Hub: Added hashed message to shared message vector." << std::endl;
 

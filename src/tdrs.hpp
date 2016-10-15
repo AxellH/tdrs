@@ -7,6 +7,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <zmq.hpp>
+#include <boost/bind.hpp>
 #include <boost/foreach.hpp>
 #include <boost/program_options.hpp>
 #include <cryptopp/sha.h>
@@ -46,9 +47,16 @@ namespace tdrs {
 			 */
 			pthread_mutex_t _sharedMessageVectorMutex;
 			/**
+			 * @brief      Shared message entry.
+			 */
+			struct _sharedMessageEntry {
+				std::string hash;
+				std::string link;
+			};
+			/**
 			 * Shared message vector between main process and chain client threads.
 			 */
-			std::vector<std::string> _sharedMessageVector;
+			std::vector<_sharedMessageEntry> _sharedMessageVector;
 
 			/**
 			 * @brief      Parameters struct for chain client thread.
@@ -57,7 +65,7 @@ namespace tdrs {
 				std::string link;
 				std::string receiver;
 				pthread_mutex_t *shmsgvecmtx;
-				std::vector<std::string> *shmsgvec;
+				std::vector<_sharedMessageEntry> *shmsgvec;
 				bool run;
 			};
 

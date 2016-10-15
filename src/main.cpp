@@ -9,9 +9,9 @@ tdrs::Hub hub(1);
  * @param[in]  signalNumber  The signal number
  */
 void signalHandler(int signalNumber) {
-	std::cout << std::endl << "Caught signal " << signalNumber << std::endl;
+	// std::cout << std::endl << "Caught signal " << signalNumber << std::endl;
 	switch(signalNumber) {
-		case 2:
+		case SIGINT:
 			hub.shutdown();
 			break;
 	}

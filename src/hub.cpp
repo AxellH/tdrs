@@ -9,75 +9,123 @@ namespace tdrs {
 	 *
 	 * @param[in]  ctxn  The number of context IO threads
 	 */
-	Hub::Hub(int ctxn) : zmqContext(ctxn), zmqHubSocket(zmqContext, ZMQ_PUB), zmqReceiverSocket(zmqContext, ZMQ_REP) {
-		runLoop = true;
+	Hub::Hub(int ctxn) : _zmqContext(ctxn), _zmqHubSocket(_zmqContext, ZMQ_PUB), _zmqReceiverSocket(_zmqContext, ZMQ_REP) {
+		_runLoop = true;
 	}
 
 	/**
-	 * @brief      Binds the external publisher.
+	 * @brief      Binds the publisher.
 	 */
-	void Hub::_bindExternalPublisher() {
-		std::cout << "Hub: Binding external publisher ..." << std::endl;
-		int zmqHubSocketLinger = 0;
-		zmqHubSocket.setsockopt(ZMQ_LINGER, &zmqHubSocketLinger, sizeof(zmqHubSocketLinger));
-		zmqHubSocket.bind("tcp://*:19790");
-		std::cout << "Hub: Bound external publisher." << std::endl;
+	void Hub::_bindPublisher() {
+		std::cout << "Hub: Binding publisher ..." << std::endl;
+		int _zmqHubSocketLinger = 0;
+		_zmqHubSocket.setsockopt(ZMQ_LINGER, &_zmqHubSocketLinger, sizeof(_zmqHubSocketLinger));
+		_zmqHubSocket.bind(_optionPublisherListen);
+		std::cout << "Hub: Bound publisher." << std::endl;
 	}
 
 	/**
-	 * @brief      Unbinds (closes) the external publisher.
+	 * @brief      Unbinds (closes) the publisher.
 	 */
-	void Hub::_unbindExternalPublisher() {
-		std::cout << "Hub: Sending termination to external subscribers ..." << std::endl;
-		zmqHubSocket.send("TERMINATE", 9, 0);
-		std::cout << "Hub: Sent termination to external subscribers." << std::endl;
-		std::cout << "Hub: Unbinding external publisher ..." << std::endl;
-		zmqHubSocket.close();
-		std::cout << "Hub: Unbound external publisher." << std::endl;
+	void Hub::_unbindPublisher() {
+		std::cout << "Hub: Sending termination to subscribers ..." << std::endl;
+		_zmqHubSocket.send("TERMINATE", 9, 0);
+		std::cout << "Hub: Sent termination to subscribers." << std::endl;
+		std::cout << "Hub: Unbinding publisher ..." << std::endl;
+		_zmqHubSocket.close();
+		std::cout << "Hub: Unbound publisher." << std::endl;
 	}
 
 	/**
-	 * @brief      Binds the external receiver.
+	 * @brief      Binds the receiver.
 	 */
-	void Hub::_bindExternalReceiver() {
-		std::cout << "Hub: Binding external receiver ..." << std::endl;
-		int zmqReceiverSocketLinger = 0;
-		zmqReceiverSocket.setsockopt(ZMQ_LINGER, &zmqReceiverSocketLinger, sizeof(zmqReceiverSocketLinger));
-		zmqReceiverSocket.bind("tcp://*:19780");
-		std::cout << "Hub: Bound external receiver." << std::endl;
+	void Hub::_bindReceiver() {
+		std::cout << "Hub: Binding receiver ..." << std::endl;
+		int _zmqReceiverSocketLinger = 0;
+		_zmqReceiverSocket.setsockopt(ZMQ_LINGER, &_zmqReceiverSocketLinger, sizeof(_zmqReceiverSocketLinger));
+		_zmqReceiverSocket.bind(_optionReceiverListen);
+		std::cout << "Hub: Bound receiver." << std::endl;
 	}
 
 	/**
-	 * @brief      Unbinds (closes) the external receiver.
+	 * @brief      Unbinds (closes) the receiver.
 	 */
-	void Hub::_unbindExternalReceiver() {
-		std::cout << "Hub: Unbinding external receiver ..." << std::endl;
-		zmqReceiverSocket.close();
-		std::cout << "Hub: Unbound external receiver." << std::endl;
+	void Hub::_unbindReceiver() {
+		std::cout << "Hub: Unbinding receiver ..." << std::endl;
+		_zmqReceiverSocket.close();
+		std::cout << "Hub: Unbound receiver." << std::endl;
+	}
+
+	/**
+	 * @brief      Sets the Hub options.
+	 *
+	 * @param[in]  argc  The main argc
+	 * @param      argv  The main argv
+	 *
+	 * @return     True on success, false on failure.
+	 */
+	bool Hub::options(int argc, char *argv[]) {
+		try {
+			bpo::options_description optionsDescription("Options:");
+			optionsDescription.add_options()
+				("help", "show this usage information")
+				("receiver-listen", bpo::value<std::string>(), "set listener for receiver")
+				("publisher-listen", bpo::value<std::string>(), "set listener for publisher")
+			;
+
+			bpo::variables_map variablesMap;
+			bpo::store(bpo::parse_command_line(argc, argv, optionsDescription), variablesMap);
+			bpo::notify(variablesMap);
+
+			if (variablesMap.count("help")) {
+				std::cout << optionsDescription << std::endl;
+				return false;
+			}
+
+			if (variablesMap.count("receiver-listen")) {
+				_optionReceiverListen = variablesMap["receiver-listen"].as<std::string>();
+				std::cout << "Hub: Listener for receiver was set to " << _optionReceiverListen << std::endl;
+			} else {
+				std::cout << "Hub: Listener for receiver (--receiver-listen) was not set!" << std::endl;
+				return false;
+			}
+
+			if (variablesMap.count("publisher-listen")) {
+				_optionPublisherListen = variablesMap["publisher-listen"].as<std::string>();
+				std::cout << "Hub: Listener for publisher was set to " << _optionPublisherListen << std::endl;
+			} else {
+				std::cout << "Hub: Listener for publisher (--publisher-listen) was not set!" << std::endl;
+				return false;
+			}
+		} catch(...) {
+			return false;
+		}
+
+		return true;
 	}
 
 	/**
 	 * @brief      Requests an exit of the run-loop on its next iteration.
 	 */
 	void Hub::shutdown() {
-		runLoop = false;
+		_runLoop = false;
 	}
 
 	/**
 	 * @brief      Runs the Hub.
 	 */
 	void Hub::run() {
-		// Bind the external publisher
-		_bindExternalPublisher();
-		// Bind the external receiver
-		_bindExternalReceiver();
+		// Bind the publisher
+		_bindPublisher();
+		// Bind the receiver
+		_bindReceiver();
 
 		// Run loop
-		while(runLoop == true) {
+		while(_runLoop == true) {
 			zmq::message_t zmqReceiverMessageIncoming;
 
 			try {
-				zmqReceiverSocket.recv(&zmqReceiverMessageIncoming);
+				_zmqReceiverSocket.recv(&zmqReceiverMessageIncoming);
 			} catch(...) {
 				continue;
 			}
@@ -95,7 +143,7 @@ namespace tdrs {
 
 			std::string zmqReceiverMessageOutgoingString;
 			try {
-				zmqHubSocket.send(zmqIpcMessageOutgoing);
+				_zmqHubSocket.send(zmqIpcMessageOutgoing);
 				zmqReceiverMessageOutgoingString = "OK";
 				std::cout << "Hub: Forwarding successful." << std::endl;
 			} catch(...) {
@@ -108,14 +156,14 @@ namespace tdrs {
 			memcpy(zmqReceiverMessageOutgoing.data(), zmqReceiverMessageOutgoingString.c_str(), zmqReceiverMessageOutgoingString.size());
 
 			std::cout << "Hub: Sending response to initiator ..." << std::endl;
-			zmqReceiverSocket.send(zmqReceiverMessageOutgoing);
+			_zmqReceiverSocket.send(zmqReceiverMessageOutgoing);
 			std::cout << "Hub: Response sent to initiator." << std::endl;
 		}
 
-		// Unbind the external receiver
-		_unbindExternalReceiver();
-		// Unbind the external publisher
-		_unbindExternalPublisher();
+		// Unbind the receiver
+		_unbindReceiver();
+		// Unbind the publisher
+		_unbindPublisher();
 
 		std::cout << "Hub: Hasta la vista." << std::endl;
 	}

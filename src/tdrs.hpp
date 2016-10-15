@@ -1,8 +1,12 @@
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <unistd.h>
 #include <signal.h>
 #include <zmq.hpp>
+#include <boost/program_options.hpp>
+namespace bpo = boost::program_options;
+
 
 /**
  * tdrs namespace
@@ -16,36 +20,39 @@ namespace tdrs {
 			/**
 			 * ZMQ Context.
 			 */
-			zmq::context_t zmqContext;
+			zmq::context_t _zmqContext;
 			/**
 			 * ZMQ Hub Socket.
 			 */
-			zmq::socket_t zmqHubSocket;
+			zmq::socket_t _zmqHubSocket;
 			/**
 			 * ZMQ Receiver Socket.
 			 */
-			zmq::socket_t zmqReceiverSocket;
+			zmq::socket_t _zmqReceiverSocket;
 			/**
 			 * The run-loop variable.
 			 */
-			bool runLoop;
+			bool _runLoop;
+
+			std::string _optionPublisherListen;
+			std::string _optionReceiverListen;
 
 			/**
-			 * @brief      Binds the external publisher.
+			 * @brief      Binds the publisher.
 			 */
-			void _bindExternalPublisher();
+			void _bindPublisher();
 			/**
-			 * @brief      Unbinds (closes) the external publisher.
+			 * @brief      Unbinds (closes) the publisher.
 			 */
-			void _unbindExternalPublisher();
+			void _unbindPublisher();
 			/**
-			 * @brief      Binds the external receiver.
+			 * @brief      Binds the receiver.
 			 */
-			void _bindExternalReceiver();
+			void _bindReceiver();
 			/**
-			 * @brief      Unbinds (closes) the external receiver.
+			 * @brief      Unbinds (closes) the receiver.
 			 */
-			void _unbindExternalReceiver();
+			void _unbindReceiver();
 		public:
 			/**
 			 * @brief      Constructs the object.
@@ -55,6 +62,15 @@ namespace tdrs {
 			Hub(int ctxn);
 			// ~Hub();
 
+			/**
+			 * @brief      Sets the Hub options.
+			 *
+			 * @param[in]  argc  The main argc
+			 * @param      argv  The main argv
+			 *
+			 * @return     True on success, false on failure.
+			 */
+			bool options(int argc, char *argv[]);
 			/**
 			 * @brief      Requests an exit of the run-loop on its next iteration.
 			 */

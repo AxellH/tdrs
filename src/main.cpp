@@ -9,7 +9,7 @@ tdrs::Hub hub(1);
  * @param[in]  signalNumber  The signal number
  */
 void signalHandler(int signalNumber) {
-	std::cout << std::endl << "Main: Caught signal " << signalNumber << std::endl;
+	std::cout << std::endl << "Caught signal " << signalNumber << std::endl;
 	switch(signalNumber) {
 		case 2:
 			hub.shutdown();
@@ -23,9 +23,11 @@ void signalHandler(int signalNumber) {
  *
  * @return     0
  */
-int main(void)
+int main(int argc, char* argv[])
 {
-	std::cout << "Main: Starting ..." << std::endl;
+	if(hub.options(argc, argv) == false) {
+		return -1;
+	}
 
 	struct sigaction mainSignalHandler;
 	mainSignalHandler.sa_handler = signalHandler;
@@ -35,6 +37,6 @@ int main(void)
 
 	hub.run();
 
-	std::cout << "Main: Quit." << std::endl;
-	return(0);
+	std::cout << "Quit." << std::endl;
+	return 0;
 }

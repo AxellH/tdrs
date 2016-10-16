@@ -149,7 +149,7 @@ namespace tdrs {
 					zmqSenderMessageIncoming.size()
 				);
 
-				if(zmqSenderMessageIncomingString == "OK") {
+				if(zmqSenderMessageIncomingString.substr(0, 3) == "OOK") {
 					std::cout << "Chain[" << params->link << "]: Forwarding successful." << std::endl;
 				} else {
 					std::cout << "Chain[" << params->link << "]: Forwarding failed!" << std::endl;
@@ -338,10 +338,10 @@ namespace tdrs {
 			std::string zmqReceiverMessageOutgoingString;
 			try {
 				_zmqHubSocket.send(zmqIpcMessageOutgoing);
-				zmqReceiverMessageOutgoingString = "OK";
+				zmqReceiverMessageOutgoingString = "OOK " + hashedMessage;
 				std::cout << "Hub: Forwarding successful." << std::endl;
 			} catch(...) {
-				zmqReceiverMessageOutgoingString = "NOK";
+				zmqReceiverMessageOutgoingString = "NOK " + hashedMessage;
 				std::cout << "Hub: Forwarding failed!" << std::endl;
 			}
 

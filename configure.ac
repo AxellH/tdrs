@@ -1,10 +1,12 @@
 AC_INIT([tdrs], [0.0.1], [houston@weltraum.co], [tdrs], [https://weltraum.co])
 AC_PREREQ([2.68])
 AC_LANG([C++])
-AX_CXX_COMPILE_STDCXX_11
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
+
+m4_include([m4/ax_cxx_compile_stdcxx.m4])
+AX_CXX_COMPILE_STDCXX(11, noext, mandatory)
 
 AM_INIT_AUTOMAKE([subdir-objects foreign -Wall -Werror])
 AC_CONFIG_FILES([Makefile])

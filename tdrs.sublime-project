@@ -2,7 +2,19 @@
 	"folders":
 	[
 		{
-			"path": "."
+			"path": ".",
+            "folder_exclude_patterns": [
+                ".libs",
+                "*.cache",
+                "build-aux",
+                "src/.deps",
+                "*.dSYM",
+            ],
+            "file_exclude_patterns": [
+            	"src/.dirstamp",
+            	"stamp-h1",
+            	"tdrs.ipc"
+            ]
 		}
 	]
 }

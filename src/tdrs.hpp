@@ -21,6 +21,25 @@ namespace bpo = boost::program_options;
  */
 namespace tdrs {
 	/**
+	 * @brief      Shared message entry.
+	 */
+	struct _sharedMessageEntry {
+		std::string hash;
+		std::string link;
+	};
+
+	/**
+	 * @brief      Parameters struct for chain client thread.
+	 */
+	struct _chainClientParams {
+		std::string link;
+		std::string receiver;
+		pthread_mutex_t *shmsgvecmtx;
+		std::vector<_sharedMessageEntry> *shmsgvec;
+		bool run;
+	};
+
+	/**
 	 * @brief      Class for Hub.
 	 */
 	class Hub {
@@ -47,27 +66,9 @@ namespace tdrs {
 			 */
 			pthread_mutex_t _sharedMessageVectorMutex;
 			/**
-			 * @brief      Shared message entry.
-			 */
-			struct _sharedMessageEntry {
-				std::string hash;
-				std::string link;
-			};
-			/**
 			 * Shared message vector between main process and chain client threads.
 			 */
 			std::vector<_sharedMessageEntry> _sharedMessageVector;
-
-			/**
-			 * @brief      Parameters struct for chain client thread.
-			 */
-			struct _chainClientParams {
-				std::string link;
-				std::string receiver;
-				pthread_mutex_t *shmsgvecmtx;
-				std::vector<_sharedMessageEntry> *shmsgvec;
-				bool run;
-			};
 
 			/**
 			 * Option: --publisher-listen
@@ -127,15 +128,6 @@ namespace tdrs {
 			 * @brief      Method for shutting down all running chain client threads.
 			 */
 			void _shutdownChainClientThreads();
-
-			/**
-			 * @brief      Static method for hashing a string using SHA1.
-			 *
-			 * @param      source  The source string
-			 *
-			 * @return     The hash.
-			 */
-			static std::string _hashString(std::string *source);
 		public:
 			/**
 			 * @brief      Constructs the object.
@@ -146,6 +138,15 @@ namespace tdrs {
 			// ~Hub();
 
 			/**
+			 * @brief      Static method for hashing a string using SHA1.
+			 *
+			 * @param      source  The source string
+			 *
+			 * @return     The hash.
+			 */
+			static std::string hashString(std::string *source);
+
+			/**
 			 * @brief      Sets the Hub options.
 			 *
 			 * @param[in]  argc  The main argc
@@ -154,6 +155,47 @@ namespace tdrs {
 			 * @return     True on success, false on failure.
 			 */
 			bool options(int argc, char *argv[]);
+			/**
+			 * @brief      Requests an exit of the run-loop on its next iteration.
+			 */
+			void shutdown();
+			/**
+			 * @brief      Runs the Hub.
+			 */
+			void run();
+	};
+
+	/**
+	 * @brief      Class for HubChainClient.
+	 */
+	class HubChainClient {
+		private:
+			_chainClientParams *_params;
+			/**
+			 * ZMQ Context.
+			 */
+			zmq::context_t _zmqContext;
+			/**
+			 * ZMQ Subscriber Socket.
+			 */
+			zmq::socket_t _zmqSubscriberSocket;
+			/**
+			 * ZMQ Sender Socket.
+			 */
+			zmq::socket_t _zmqSenderSocket;
+			/**
+			 * The run-loop variable.
+			 */
+			bool _runLoop;
+		public:
+			/**
+			 * @brief      Constructs the object.
+			 *
+			 * @param[in]  ctxn  The number of context IO threads
+			 */
+			HubChainClient(int ctxn, _chainClientParams *params);
+			// ~HubChainClient();
+
 			/**
 			 * @brief      Requests an exit of the run-loop on its next iteration.
 			 */

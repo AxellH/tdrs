@@ -65,111 +65,9 @@ namespace tdrs {
 	 */
 	void *Hub::_chainClient(void *chainClientParams) {
 		_chainClientParams *params = static_cast<_chainClientParams*>(chainClientParams);
-		std::vector<_sharedMessageEntry> &sharedMessageVector = *params->shmsgvec;
+		tdrs::HubChainClient hubChainClient(1, params);
 
-		std::cout << "Chain[" << params->link << "]: Starting ..." << std::endl;
-		zmq::context_t zmqContext(1);
-
-		int zmqSenderSocketLinger = 0;
-		std::cout << "Chain[" << params->link << "]: Connecting to receiver at " << params->receiver << " ..." << std::endl;
-		zmq::socket_t zmqSenderSocket(zmqContext, ZMQ_REQ);
-		zmqSenderSocket.setsockopt(ZMQ_LINGER, &zmqSenderSocketLinger, sizeof(zmqSenderSocketLinger));
-		zmqSenderSocket.connect(params->receiver);
-		std::cout << "Chain[" << params->link << "]: Connected to receiver." << std::endl;
-
-		int zmqSubscriberSocketLinger = 0;
-		std::cout << "Chain[" << params->link << "]: Subscribing to link publisher at " << params->link << " ..." << std::endl;
-		zmq::socket_t zmqSubscriberSocket(zmqContext, ZMQ_SUB);
-		zmqSubscriberSocket.setsockopt(ZMQ_LINGER, &zmqSubscriberSocketLinger, sizeof(zmqSubscriberSocketLinger));
-		zmqSubscriberSocket.setsockopt(ZMQ_IDENTITY, "hub", 3);
-		zmqSubscriberSocket.setsockopt(ZMQ_SUBSCRIBE, "", 0);
-		zmqSubscriberSocket.connect(params->link);
-		std::cout << "Chain[" << params->link << "]: Subscribed to link publisher." << std::endl;
-
-		while(params->run == true) {
-			std::cout << "Chain[" << params->link << "]: Loop started ..." << std::endl;
-			zmq::message_t zmqSubscriberMessageIncoming;
-
-			try {
-				zmqSubscriberSocket.recv(&zmqSubscriberMessageIncoming);
-			} catch(...) {
-				std::cout << "Chain[" << params->link << "]: Message receiver failed. Looping." << std::endl;
-				continue;
-			}
-
-			std::string zmqSubscriberMessageIncomingString(
-				static_cast<const char*>(zmqSubscriberMessageIncoming.data()),
-				zmqSubscriberMessageIncoming.size()
-			);
-
-			std::cout << "Chain[" << params->link << "]: Received message: " << zmqSubscriberMessageIncomingString << std::endl;
-
-			std::string hashedMessage = Hub::_hashString(&zmqSubscriberMessageIncomingString);
-			std::cout << "Chain[" << params->link << "]: Hashed message: " << hashedMessage << std::endl;
-
-			std::cout << "Chain[" << params->link << "]: Checking hashed message in shared message vector ..." << std::endl;
-			bool processMessage = true;
-			pthread_mutex_lock(params->shmsgvecmtx);
-			if(std::find_if(
-					sharedMessageVector.begin(),
-					sharedMessageVector.end(),
-					(boost::bind(&_sharedMessageEntry::hash, _1) == hashedMessage
-						&& boost::bind(&_sharedMessageEntry::link, _1) == params->link)
-				) != sharedMessageVector.end()) {
-				sharedMessageVector.erase(
-					std::remove_if(
-						sharedMessageVector.begin(),
-						sharedMessageVector.end(),
-						(boost::bind(&_sharedMessageEntry::hash, _1) == hashedMessage
-							&& boost::bind(&_sharedMessageEntry::link, _1) == params->link)
-					), sharedMessageVector.end());
-				processMessage = false;
-			}
-			pthread_mutex_unlock(params->shmsgvecmtx);
-			std::cout << "Chain[" << params->link << "]: Checked hashed message in shared message vector." << std::endl;
-
-			if(processMessage) {
-				std::cout << "Chain[" << params->link << "]: Forwarding message to receiver ..." << std::endl;
-				try {
-					zmqSenderSocket.send(zmqSubscriberMessageIncoming);
-				} catch(...) {
-					std::cout << "Chain[" << params->link << "]: Forwarding failed!" << std::endl;
-					continue;
-				}
-
-				zmq::message_t zmqSenderMessageIncoming;
-				try {
-					zmqSenderSocket.recv(&zmqSenderMessageIncoming);
-				} catch(...) {
-					continue;
-				}
-
-				std::string zmqSenderMessageIncomingString(
-					static_cast<const char*>(zmqSenderMessageIncoming.data()),
-					zmqSenderMessageIncoming.size()
-				);
-
-				if(zmqSenderMessageIncomingString.substr(0, 3) == "OOK") {
-					std::cout << "Chain[" << params->link << "]: Forwarding successful." << std::endl;
-				} else {
-					std::cout << "Chain[" << params->link << "]: Forwarding failed!" << std::endl;
-				}
-			} else {
-				std::cout << "Chain[" << params->link << "]: Not forwarding message to receiver as it was processed before." << std::endl;
-			}
-		}
-
-		std::cout << std::endl << "Chain[" << params->link << "]: Unsubscribing from link publisher at " << params->link << " ..." << std::endl;
-		zmqSubscriberSocket.close();
-		std::cout << std::endl << "Chain[" << params->link << "]: Unsubscribed from link publisher." << std::endl;
-
-		std::cout << std::endl << "Chain[" << params->link << "]: Disconnecting from from receiver at " << params->receiver << " ..." << std::endl;
-		zmqSenderSocket.close();
-		std::cout << std::endl << "Chain[" << params->link << "]: Disconnected from from receiver ..." << std::endl;
-
-		std::cout << std::endl << "Chain[" << params->link << "]: Goodbye!" << std::endl;
-		std::cout.flush();
-		delete params;
+		hubChainClient.run();
 		return NULL;
 	}
 
@@ -218,7 +116,7 @@ namespace tdrs {
 	 *
 	 * @return     The hash.
 	 */
-	std::string Hub::_hashString(std::string *source) {
+	std::string Hub::hashString(std::string *source) {
 		CryptoPP::SHA1 sha1;
 		std::string hashed = "";
 
@@ -315,7 +213,7 @@ namespace tdrs {
 
 			std::cout << "Hub: Received message: " << zmqReceiverMessageIncomingString << std::endl;
 
-			std::string hashedMessage = Hub::_hashString(&zmqReceiverMessageIncomingString);
+			std::string hashedMessage = Hub::hashString(&zmqReceiverMessageIncomingString);
 			std::cout << "Hub: Hashed message: " << hashedMessage << std::endl;
 
 			std::cout << "Hub: Adding hashed message to shared message vector ..." << std::endl;

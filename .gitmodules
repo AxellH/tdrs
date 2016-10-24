@@ -1,3 +1,6 @@
 [submodule "ext/cppzmq"]
 	path = ext/cppzmq
 	url = https://mrusme@github.com/zeromq/cppzmq.git
+[submodule "ext/zyrecpp"]
+	path = ext/zyrecpp
+	url = https://mrusme@github.com/twostairs/zyrecpp.git

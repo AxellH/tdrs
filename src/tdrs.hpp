@@ -13,6 +13,7 @@
 #include <cryptopp/sha.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/hex.h>
+#include <zyrecpp.hpp>
 
 namespace bpo = boost::program_options;
 
@@ -37,6 +38,45 @@ namespace tdrs {
 		pthread_mutex_t *shmsgvecmtx;
 		std::vector<_sharedMessageEntry> *shmsgvec;
 		bool run;
+	};
+
+	/**
+	 * @brief      Chain client thread struct, containing the thread itself and the parameters.
+	 */
+	struct _chainClientThread {
+		pthread_t thread;
+		_chainClientParams *params;
+	};
+
+	/**
+	 * @brief      Parameters struct for service discovery listener thread.
+	 */
+	struct _discoveryServiceListenerParams {
+		std::string receiver;
+		bool run;
+	};
+
+	/**
+	 * @brief      Discovery service listener thread struct, containing the thread itself and the parameters.
+	 */
+	struct _discoveryServiceListenerThread {
+		pthread_t thread;
+		_discoveryServiceListenerParams *params;
+	};
+
+	/**
+	 * @brief      Parameters struct for service discovery announcer thread.
+	 */
+	struct _discoveryServiceAnnouncerParams {
+		bool run;
+	};
+
+	/**
+	 * @brief      Discovery service announcer thread struct, containing the thread itself and the parameters.
+	 */
+	struct _discoveryServiceAnnouncerThread {
+		pthread_t thread;
+		_discoveryServiceAnnouncerParams *params;
 	};
 
 	/**
@@ -101,12 +141,36 @@ namespace tdrs {
 			void _unbindReceiver();
 
 			/**
-			 * @brief      Chain client thread struct, containing the thread itself and the parameters.
+			 * Instance storing discovery service listener thread struct.
 			 */
-			struct _chainClientThread {
-				pthread_t thread;
-				_chainClientParams *params;
-			};
+			_discoveryServiceListenerThread _discoveryServiceListenerThreadInstance;
+			/**
+			 * @brief      The discovery service listener; static method instantiated as an own thread.
+			 *
+			 * @param      discoveryServiceParamsListener  The discovery service listener parameters (struct)
+			 *
+			 * @return     NULL
+			 */
+			static void *_discoveryServiceListener(void *discoveryServiceListenerParams);
+
+			/**
+			 * Instance storing discovery service announcer thread struct.
+			 */
+			_discoveryServiceAnnouncerThread _discoveryServiceAnnouncerThreadInstance;
+			/**
+			 * @brief      The discovery service announcer; static method instantiated as an own thread.
+			 *
+			 * @param      discoveryServiceParamsListener  The discovery service listener parameters (struct)
+			 *
+			 * @return     NULL
+			 */
+			static void *_discoveryServiceAnnouncer(void *discoveryServiceAnnouncerParams);
+
+			/**
+			 * @brief      Method for running discovery service thread.
+			 */
+			void _runDisoveryServiceThreads();
+
 			/**
 			 * Vector storing chain client thread structs.
 			 */
@@ -120,6 +184,13 @@ namespace tdrs {
 			 * @return     NULL
 			 */
 			static void *_chainClient(void *chainClientParams);
+
+			/**
+			 * @brief      Method for running one chain client thread.
+			 *
+			 * @param[in]  link  The link
+			 */
+			void _runChainClientThread(std::string link);
 			/**
 			 * @brief      Method for running all required chain client threads.
 			 */
@@ -128,6 +199,15 @@ namespace tdrs {
 			 * @brief      Method for shutting down all running chain client threads.
 			 */
 			void _shutdownChainClientThreads();
+
+			/**
+			 * @brief      Method for rewriting a receiver address if necessarry.
+			 *
+			 * @param      receiver  The receiver address
+			 *
+			 * @return     The rewritten address
+			 */
+			std::string _rewriteReceiver(std::string *receiver);
 		public:
 			/**
 			 * @brief      Constructs the object.
@@ -161,6 +241,64 @@ namespace tdrs {
 			void shutdown();
 			/**
 			 * @brief      Runs the Hub.
+			 */
+			void run();
+	};
+
+	/**
+	 * @brief      Class for HubDiscoveryServiceListener.
+	 */
+	class HubDiscoveryServiceListener {
+		private:
+			_discoveryServiceListenerParams *_params;
+			/**
+			 * The run-loop variable.
+			 */
+			bool _runLoop;
+		public:
+			/**
+			 * @brief      Constructs the object.
+			 *
+			 * @param[in]  ctxn  The number of context IO threads
+			 */
+			HubDiscoveryServiceListener(_discoveryServiceListenerParams *params);
+			// ~HubDiscoveryServiceListener();
+
+			/**
+			 * @brief      Requests an exit of the run-loop on its next iteration.
+			 */
+			void shutdown();
+			/**
+			 * @brief      Runs the discovery service.
+			 */
+			void run();
+	};
+
+	/**
+	 * @brief      Class for HubDiscoveryServiceAnnouncer.
+	 */
+	class HubDiscoveryServiceAnnouncer {
+		private:
+			_discoveryServiceAnnouncerParams *_params;
+			/**
+			 * The run-loop variable.
+			 */
+			bool _runLoop;
+		public:
+			/**
+			 * @brief      Constructs the object.
+			 *
+			 * @param[in]  ctxn  The number of context IO threads
+			 */
+			HubDiscoveryServiceAnnouncer(_discoveryServiceAnnouncerParams *params);
+			// ~HubDiscoveryServiceAnnouncer();
+
+			/**
+			 * @brief      Requests an exit of the run-loop on its next iteration.
+			 */
+			void shutdown();
+			/**
+			 * @brief      Runs the discovery service.
 			 */
 			void run();
 	};
@@ -201,7 +339,7 @@ namespace tdrs {
 			 */
 			void shutdown();
 			/**
-			 * @brief      Runs the Hub.
+			 * @brief      Runs the chain client.
 			 */
 			void run();
 	};

@@ -57,6 +57,58 @@ namespace tdrs {
 	}
 
 	/**
+	 * @brief      The discovery service listener; static method instantiated as an own thread.
+	 *
+	 * @param      discoveryServiceParams  The discovery service parameters (struct)
+	 *
+	 * @return     NULL
+	 */
+	void *Hub::_discoveryServiceListener(void *discoveryServiceListenerParams) {
+		_discoveryServiceListenerParams *params = static_cast<_discoveryServiceListenerParams*>(discoveryServiceListenerParams);
+		tdrs::HubDiscoveryServiceListener hubDiscoveryServiceListener(params);
+
+		hubDiscoveryServiceListener.run();
+		return NULL;
+	}
+
+	/**
+	 * @brief      The discovery service announcer; static method instantiated as an own thread.
+	 *
+	 * @param      discoveryServiceParams  The discovery service parameters (struct)
+	 *
+	 * @return     NULL
+	 */
+	void *Hub::_discoveryServiceAnnouncer(void *discoveryServiceAnnouncerParams) {
+		_discoveryServiceAnnouncerParams *params = static_cast<_discoveryServiceAnnouncerParams*>(discoveryServiceAnnouncerParams);
+		tdrs::HubDiscoveryServiceAnnouncer hubDiscoveryServiceAnnouncer(params);
+
+		hubDiscoveryServiceAnnouncer.run();
+		return NULL;
+	}
+
+	/**
+	 * @brief      Method for running discovery service threads.
+	 */
+	void Hub::_runDisoveryServiceThreads() {
+		std::cout << "Hub: Launching discovery service threads ..." << std::endl;
+
+		std::cout << "Hub: Launching discovery listener thread ..." << std::endl;
+		_discoveryServiceListenerThreadInstance.params = new _discoveryServiceListenerParams;
+		_discoveryServiceListenerThreadInstance.params->receiver = _rewriteReceiver(&_optionReceiverListen);
+		_discoveryServiceListenerThreadInstance.params->run = true;
+
+		pthread_create(&_discoveryServiceListenerThreadInstance.thread, NULL, &Hub::_discoveryServiceListener, (void *)_discoveryServiceListenerThreadInstance.params);
+
+		std::cout << "Hub: Launching discovery announcer thread ..." << std::endl;
+		_discoveryServiceAnnouncerThreadInstance.params = new _discoveryServiceAnnouncerParams;
+		_discoveryServiceAnnouncerThreadInstance.params->run = true;
+
+		pthread_create(&_discoveryServiceAnnouncerThreadInstance.thread, NULL, &Hub::_discoveryServiceListener, (void *)_discoveryServiceAnnouncerThreadInstance.params);
+
+		std::cout << "Hub: Discovery service threads launched." << std::endl;
+	}
+
+	/**
 	 * @brief      The chain client; static method instantiated as an own thread.
 	 *
 	 * @param      chainClientParams  The chain client parameters (struct)
@@ -72,27 +124,35 @@ namespace tdrs {
 	}
 
 	/**
+	 * @brief      Method for running one chain client thread.
+	 *
+	 * @param[in]  link  The link
+	 */
+	void Hub::_runChainClientThread(std::string link) {
+		std::cout << "Hub: Launching chain client thread for link " << link << " ..." << std::endl;
+
+		_chainClientThread client;
+		client.params = new _chainClientParams;
+
+		client.params->shmsgvecmtx = &_sharedMessageVectorMutex;
+		client.params->shmsgvec = &_sharedMessageVector;
+		client.params->link = link;
+
+		client.params->receiver = _rewriteReceiver(&_optionReceiverListen);
+
+		client.params->run = true;
+
+		pthread_create(&client.thread, NULL, &Hub::_chainClient, (void *)client.params);
+		_chainClientThreads.push_back(client);
+	}
+
+	/**
 	 * @brief      Method for running all required chain client threads.
 	 */
 	void Hub::_runChainClientThreads() {
 		std::string link;
 		BOOST_FOREACH(link, _optionChainLinks) {
-			std::cout << "Hub: Launching chain client thread for link " << link << " ..." << std::endl;
-
-			_chainClientThread client;
-			client.params = new _chainClientParams;
-
-			client.params->shmsgvecmtx = &_sharedMessageVectorMutex;
-			client.params->shmsgvec = &_sharedMessageVector;
-			client.params->link = link;
-
-			std::regex receiverReplaceRegex("(\\*|0\\.0\\.0\\.0)");
-			client.params->receiver = std::regex_replace(_optionReceiverListen, receiverReplaceRegex, "127.0.0.1");
-
-			client.params->run = true;
-
-			pthread_create(&client.thread, NULL, &Hub::_chainClient, (void *)client.params);
-			_chainClientThreads.push_back(client);
+			_runChainClientThread(link);
 		}
 	}
 
@@ -123,6 +183,11 @@ namespace tdrs {
 		CryptoPP::StringSource(*source, true, new CryptoPP::HashFilter(sha1, new CryptoPP::HexEncoder(new CryptoPP::StringSink(hashed))));
 
 		return hashed;
+	}
+
+	std::string Hub::_rewriteReceiver(std::string *receiver) {
+		std::regex receiverReplaceRegex("(\\*|0\\.0\\.0\\.0)");
+		return std::regex_replace(_optionReceiverListen, receiverReplaceRegex, "127.0.0.1");
 	}
 
 	/**
@@ -192,6 +257,9 @@ namespace tdrs {
 		_bindPublisher();
 		// Bind the receiver
 		_bindReceiver();
+
+		// Run the discovery service threads
+		_runDisoveryServiceThreads();
 
 		// Run chain client threads
 		_runChainClientThreads();

@@ -45,6 +45,7 @@ namespace tdrs {
 	 */
 	struct _chainClientThread {
 		pthread_t thread;
+		pthread_attr_t thattr;
 		_chainClientParams *params;
 	};
 
@@ -61,6 +62,7 @@ namespace tdrs {
 	 */
 	struct _discoveryServiceListenerThread {
 		pthread_t thread;
+		pthread_attr_t thattr;
 		_discoveryServiceListenerParams *params;
 	};
 
@@ -76,6 +78,7 @@ namespace tdrs {
 	 */
 	struct _discoveryServiceAnnouncerThread {
 		pthread_t thread;
+		pthread_attr_t thattr;
 		_discoveryServiceAnnouncerParams *params;
 	};
 
@@ -170,6 +173,10 @@ namespace tdrs {
 			 * @brief      Method for running discovery service thread.
 			 */
 			void _runDisoveryServiceThreads();
+			/**
+			 * @brief      Method for shutting down all running discovery service threads.
+			 */
+			void _shutdownDisoveryServiceThreads();
 
 			/**
 			 * Vector storing chain client thread structs.

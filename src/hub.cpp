@@ -97,15 +97,32 @@ namespace tdrs {
 		_discoveryServiceListenerThreadInstance.params->receiver = _rewriteReceiver(&_optionReceiverListen);
 		_discoveryServiceListenerThreadInstance.params->run = true;
 
-		pthread_create(&_discoveryServiceListenerThreadInstance.thread, NULL, &Hub::_discoveryServiceListener, (void *)_discoveryServiceListenerThreadInstance.params);
+		pthread_attr_init(&_discoveryServiceListenerThreadInstance.thattr);
+		pthread_attr_setdetachstate(&_discoveryServiceListenerThreadInstance.thattr, PTHREAD_CREATE_DETACHED);
+		pthread_create(&_discoveryServiceListenerThreadInstance.thread, &_discoveryServiceListenerThreadInstance.thattr, &Hub::_discoveryServiceListener, (void *)_discoveryServiceListenerThreadInstance.params);
 
 		std::cout << "Hub: Launching discovery announcer thread ..." << std::endl;
 		_discoveryServiceAnnouncerThreadInstance.params = new _discoveryServiceAnnouncerParams;
 		_discoveryServiceAnnouncerThreadInstance.params->run = true;
 
-		pthread_create(&_discoveryServiceAnnouncerThreadInstance.thread, NULL, &Hub::_discoveryServiceListener, (void *)_discoveryServiceAnnouncerThreadInstance.params);
+		pthread_attr_init(&_discoveryServiceAnnouncerThreadInstance.thattr);
+		pthread_attr_setdetachstate(&_discoveryServiceAnnouncerThreadInstance.thattr, PTHREAD_CREATE_DETACHED);
+		pthread_create(&_discoveryServiceAnnouncerThreadInstance.thread, &_discoveryServiceAnnouncerThreadInstance.thattr, &Hub::_discoveryServiceAnnouncer, (void *)_discoveryServiceAnnouncerThreadInstance.params);
 
 		std::cout << "Hub: Discovery service threads launched." << std::endl;
+	}
+
+	/**
+	 * @brief      Method for shutting down all running discovery service threads.
+	 */
+	void Hub::_shutdownDisoveryServiceThreads() {
+		std::cout << "Hub: Shutting down discovery announcer thread ..." << std::endl;
+		_discoveryServiceAnnouncerThreadInstance.params->run = false;
+		pthread_kill(_discoveryServiceAnnouncerThreadInstance.thread, SIGINT);
+
+		std::cout << "Hub: Shutting down discovery listener thread ..." << std::endl;
+		_discoveryServiceListenerThreadInstance.params->run = false;
+		pthread_kill(_discoveryServiceListenerThreadInstance.thread, SIGINT);
 	}
 
 	/**
@@ -264,6 +281,7 @@ namespace tdrs {
 		// Run chain client threads
 		_runChainClientThreads();
 
+		std::cout << "Hub: Launching run-loop ..." << std::endl;
 		// Run loop
 		while(_runLoop == true) {
 			zmq::message_t zmqReceiverMessageIncoming;
@@ -324,6 +342,9 @@ namespace tdrs {
 
 		// Shutdown chain client threads
 		_shutdownChainClientThreads();
+
+		// Shutdown the discovery service threads
+		_shutdownDisoveryServiceThreads();
 
 		// Unbind the receiver
 		_unbindReceiver();

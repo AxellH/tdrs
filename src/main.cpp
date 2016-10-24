@@ -29,6 +29,10 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
+	// CZMQ (used by zyre) has its own signal handler, which takes over on ours.
+	// Therefor, we set its' to null.
+	zsys_handler_set(NULL);
+
 	struct sigaction mainSignalHandler;
 	mainSignalHandler.sa_handler = signalHandler;
 	sigemptyset(&mainSignalHandler.sa_mask);
@@ -36,6 +40,8 @@ int main(int argc, char* argv[])
 	sigaction(SIGINT, &mainSignalHandler, NULL);
 
 	hub.run();
+
+	// zsys_shutdown();
 
 	std::cout << "Quit." << std::endl;
 	return 0;

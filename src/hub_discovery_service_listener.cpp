@@ -39,9 +39,8 @@ namespace tdrs {
 			std::cout << "DL: type: " << zyreEvent.type() << std::endl;
 			std::cout << "DL: sender: " << zyreEvent.sender() << std::endl;
 			std::cout << "DL: name: " << zyreEvent.name() << std::endl;
-			// TODO: Commenting in those two lines causes a Segmentation fault: 11
-			// std::cout << "DL: address: " << zyreEvent.address() << std::endl;
-			// std::cout << "DL: group: " << zyreEvent.group() << std::endl;
+			std::cout << "DL: address: " << zyreEvent.address() << std::endl;
+			std::cout << "DL: group: " << zyreEvent.group() << std::endl;
 			// zyreEvent.print();
 		}
 

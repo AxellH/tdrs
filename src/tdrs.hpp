@@ -21,6 +21,18 @@ namespace bpo = boost::program_options;
  * tdrs namespace
  */
 namespace tdrs {
+	struct zeroAddress {
+		std::string protocol;
+		std::string address;
+		std::string port;
+	};
+
+	struct peerMessage {
+		std::string id;
+		std::string link;
+		std::string key;
+	};
+
 	/**
 	 * @brief      Shared message entry.
 	 */
@@ -33,6 +45,7 @@ namespace tdrs {
 	 * @brief      Parameters struct for chain client thread.
 	 */
 	struct _chainClientParams {
+		std::string id;
 		std::string link;
 		std::string receiver;
 		pthread_mutex_t *shmsgvecmtx;
@@ -54,6 +67,7 @@ namespace tdrs {
 	 */
 	struct _discoveryServiceListenerParams {
 		std::string receiver;
+		std::string key;
 		bool run;
 	};
 
@@ -70,6 +84,8 @@ namespace tdrs {
 	 * @brief      Parameters struct for service discovery announcer thread.
 	 */
 	struct _discoveryServiceAnnouncerParams {
+		std::string publisher;
+		std::string key;
 		bool run;
 	};
 
@@ -195,9 +211,10 @@ namespace tdrs {
 			/**
 			 * @brief      Method for running one chain client thread.
 			 *
+			 * @param[in]  id    The identifier
 			 * @param[in]  link  The link
 			 */
-			void _runChainClientThread(std::string link);
+			void _runChainClientThread(std::string id, std::string link);
 			/**
 			 * @brief      Method for running all required chain client threads.
 			 */
@@ -215,6 +232,8 @@ namespace tdrs {
 			 * @return     The rewritten address
 			 */
 			std::string _rewriteReceiver(std::string *receiver);
+
+			static peerMessage *_parsePeerMessage(const std::string &message);
 		public:
 			/**
 			 * @brief      Constructs the object.
@@ -232,6 +251,8 @@ namespace tdrs {
 			 * @return     The hash.
 			 */
 			static std::string hashString(std::string *source);
+
+			static zeroAddress *parseZeroAddress(const std::string &address);
 
 			/**
 			 * @brief      Sets the Hub options.

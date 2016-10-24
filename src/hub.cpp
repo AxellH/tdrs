@@ -95,6 +95,7 @@ namespace tdrs {
 		std::cout << "Hub: Launching discovery listener thread ..." << std::endl;
 		_discoveryServiceListenerThreadInstance.params = new _discoveryServiceListenerParams;
 		_discoveryServiceListenerThreadInstance.params->receiver = _rewriteReceiver(&_optionReceiverListen);
+		_discoveryServiceListenerThreadInstance.params->key = "ABC"; // TODO: Get from options
 		_discoveryServiceListenerThreadInstance.params->run = true;
 
 		pthread_attr_init(&_discoveryServiceListenerThreadInstance.thattr);
@@ -103,6 +104,8 @@ namespace tdrs {
 
 		std::cout << "Hub: Launching discovery announcer thread ..." << std::endl;
 		_discoveryServiceAnnouncerThreadInstance.params = new _discoveryServiceAnnouncerParams;
+		_discoveryServiceAnnouncerThreadInstance.params->publisher = _optionPublisherListen;
+		_discoveryServiceAnnouncerThreadInstance.params->key = "ABC"; // TODO: Get from options
 		_discoveryServiceAnnouncerThreadInstance.params->run = true;
 
 		pthread_attr_init(&_discoveryServiceAnnouncerThreadInstance.thattr);
@@ -143,9 +146,10 @@ namespace tdrs {
 	/**
 	 * @brief      Method for running one chain client thread.
 	 *
+	 * @param[in]  id    The identifier
 	 * @param[in]  link  The link
 	 */
-	void Hub::_runChainClientThread(std::string link) {
+	void Hub::_runChainClientThread(std::string id, std::string link) {
 		std::cout << "Hub: Launching chain client thread for link " << link << " ..." << std::endl;
 
 		_chainClientThread client;
@@ -153,13 +157,17 @@ namespace tdrs {
 
 		client.params->shmsgvecmtx = &_sharedMessageVectorMutex;
 		client.params->shmsgvec = &_sharedMessageVector;
+		client.params->id = id;
 		client.params->link = link;
 
 		client.params->receiver = _rewriteReceiver(&_optionReceiverListen);
 
 		client.params->run = true;
 
-		pthread_create(&client.thread, NULL, &Hub::_chainClient, (void *)client.params);
+		pthread_attr_init(&client.thattr);
+		pthread_attr_setdetachstate(&client.thattr, PTHREAD_CREATE_DETACHED);
+		pthread_create(&client.thread, &client.thattr, &Hub::_chainClient, (void *)client.params);
+
 		_chainClientThreads.push_back(client);
 	}
 
@@ -168,8 +176,14 @@ namespace tdrs {
 	 */
 	void Hub::_runChainClientThreads() {
 		std::string link;
+		std::string idPrefix = "manual-";
+		int idNumber = 0;
+
 		BOOST_FOREACH(link, _optionChainLinks) {
-			_runChainClientThread(link);
+			idNumber++;
+
+			std::string id = idPrefix + std::to_string(idNumber);
+			_runChainClientThread(id, link);
 		}
 	}
 
@@ -205,6 +219,40 @@ namespace tdrs {
 	std::string Hub::_rewriteReceiver(std::string *receiver) {
 		std::regex receiverReplaceRegex("(\\*|0\\.0\\.0\\.0)");
 		return std::regex_replace(_optionReceiverListen, receiverReplaceRegex, "127.0.0.1");
+	}
+
+	peerMessage *Hub::_parsePeerMessage(const std::string &message) {
+		std::regex messageSearchRegex("PEER:(.+):(.+):([0-9\\.]+):([0-9]+):(.+)");
+		std::smatch match;
+
+		if(std::regex_search(message.begin(), message.end(), match, messageSearchRegex)) {
+			peerMessage *pm = new peerMessage;
+
+			pm->id = match[1];
+			pm->link = match[2].str() + "://" + match[3].str() + (match[4].str() != "" ? (":" + match[4].str()) : "");
+			pm->key = match[5];
+
+			return pm;
+		}
+
+		return NULL;
+	}
+
+	zeroAddress *Hub::parseZeroAddress(const std::string &address) {
+		std::regex addressSearchRegex("(.+):\\/\\/([0-9\\.\\*]+):?([0-9]*)");
+		std::smatch match;
+
+		if(std::regex_search(address.begin(), address.end(), match, addressSearchRegex)) {
+			zeroAddress *za = new zeroAddress;
+
+			za->protocol = match[1];
+			za->address = match[2];
+			za->port = match[3];
+
+			return za;
+		}
+
+		return NULL;
 	}
 
 	/**
@@ -298,6 +346,20 @@ namespace tdrs {
 			);
 
 			std::cout << "Hub: Received message: " << zmqReceiverMessageIncomingString << std::endl;
+
+			if(zmqReceiverMessageIncomingString.substr(0, 5) == "PEER:") {
+				std::cout << "Hub: Message is peer announcement. Processing ..." << std::endl;
+
+				peerMessage *discoveredPeer = Hub::_parsePeerMessage(zmqReceiverMessageIncomingString);
+
+				if(discoveredPeer != NULL) {
+					std::cout << "Hub: Running new chain client thread for announced peer ..." << std::endl;
+					_runChainClientThread(discoveredPeer->id, discoveredPeer->link);
+					delete discoveredPeer;
+				}
+
+				continue;
+			}
 
 			std::string hashedMessage = Hub::hashString(&zmqReceiverMessageIncomingString);
 			std::cout << "Hub: Hashed message: " << hashedMessage << std::endl;

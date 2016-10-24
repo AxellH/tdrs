@@ -20,13 +20,17 @@ namespace tdrs {
 	 * @return     NULL
 	 */
 	void HubDiscoveryServiceAnnouncer::run() {
-		std::cout << "DA: Running discovery service announcer ..." << std::endl;
-		zyre::node_t _zyreAnnouncerNode;
+		std::cout << "DA: Running discovery service announcer for publisher " << _params->publisher << " ..." << std::endl;
 
+		zeroAddress *publisherAddress = Hub::parseZeroAddress(_params->publisher);
+
+		zyre::node_t _zyreAnnouncerNode;
 		std::cout << "DA: Adding node for discovery service announcer ..." << std::endl;
-		_zyreAnnouncerNode = zyre::node_t("nodeOne");
-		std::cout << "DA: Setting header of discovery service announcer ..." << std::endl;
-		_zyreAnnouncerNode.set_header("X-HELLO", "World");
+		_zyreAnnouncerNode = zyre::node_t(zsys_hostname());
+		std::cout << "DA: Setting X-PORT header of discovery service announcer to " << publisherAddress->port << " ..." << std::endl;
+		_zyreAnnouncerNode.set_header("X-ADDRESS", publisherAddress->address);
+		_zyreAnnouncerNode.set_header("X-PORT", publisherAddress->port);
+		_zyreAnnouncerNode.set_header("X-KEY", _params->key);
 		// _zyreAnnouncerNode.set_verbose();
 		std::cout << "DA: Starting node for discovery service announcer ..." << std::endl;
 		_zyreAnnouncerNode.start();
@@ -53,6 +57,7 @@ namespace tdrs {
 		std::cout << "DA: Stopping node ..." << std::endl;
 		_zyreAnnouncerNode.stop();
 
+		delete publisherAddress;
 		delete _params;
 		std::cout << "DA: Goodbye!" << std::endl;
 	}

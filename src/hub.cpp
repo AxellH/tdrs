@@ -72,21 +72,6 @@ namespace tdrs {
 	}
 
 	/**
-	 * @brief      The discovery service announcer; static method instantiated as an own thread.
-	 *
-	 * @param      discoveryServiceParams  The discovery service parameters (struct)
-	 *
-	 * @return     NULL
-	 */
-	void *Hub::_discoveryServiceAnnouncer(void *discoveryServiceAnnouncerParams) {
-		_discoveryServiceAnnouncerParams *params = static_cast<_discoveryServiceAnnouncerParams*>(discoveryServiceAnnouncerParams);
-		tdrs::HubDiscoveryServiceAnnouncer hubDiscoveryServiceAnnouncer(params);
-
-		hubDiscoveryServiceAnnouncer.run();
-		return NULL;
-	}
-
-	/**
 	 * @brief      Method for running discovery service threads.
 	 */
 	void Hub::_runDisoveryServiceThreads() {
@@ -95,22 +80,13 @@ namespace tdrs {
 		std::cout << "Hub: Launching discovery listener thread ..." << std::endl;
 		_discoveryServiceListenerThreadInstance.params = new _discoveryServiceListenerParams;
 		_discoveryServiceListenerThreadInstance.params->receiver = _rewriteReceiver(&_optionReceiverListen);
+		_discoveryServiceListenerThreadInstance.params->publisher = _optionPublisherListen;
 		_discoveryServiceListenerThreadInstance.params->key = "ABC"; // TODO: Get from options
 		_discoveryServiceListenerThreadInstance.params->run = true;
 
 		pthread_attr_init(&_discoveryServiceListenerThreadInstance.thattr);
 		pthread_attr_setdetachstate(&_discoveryServiceListenerThreadInstance.thattr, PTHREAD_CREATE_DETACHED);
 		pthread_create(&_discoveryServiceListenerThreadInstance.thread, &_discoveryServiceListenerThreadInstance.thattr, &Hub::_discoveryServiceListener, (void *)_discoveryServiceListenerThreadInstance.params);
-
-		std::cout << "Hub: Launching discovery announcer thread ..." << std::endl;
-		_discoveryServiceAnnouncerThreadInstance.params = new _discoveryServiceAnnouncerParams;
-		_discoveryServiceAnnouncerThreadInstance.params->publisher = _optionPublisherListen;
-		_discoveryServiceAnnouncerThreadInstance.params->key = "ABC"; // TODO: Get from options
-		_discoveryServiceAnnouncerThreadInstance.params->run = true;
-
-		pthread_attr_init(&_discoveryServiceAnnouncerThreadInstance.thattr);
-		pthread_attr_setdetachstate(&_discoveryServiceAnnouncerThreadInstance.thattr, PTHREAD_CREATE_DETACHED);
-		pthread_create(&_discoveryServiceAnnouncerThreadInstance.thread, &_discoveryServiceAnnouncerThreadInstance.thattr, &Hub::_discoveryServiceAnnouncer, (void *)_discoveryServiceAnnouncerThreadInstance.params);
 
 		std::cout << "Hub: Discovery service threads launched." << std::endl;
 	}
@@ -119,10 +95,6 @@ namespace tdrs {
 	 * @brief      Method for shutting down all running discovery service threads.
 	 */
 	void Hub::_shutdownDisoveryServiceThreads() {
-		std::cout << "Hub: Shutting down discovery announcer thread ..." << std::endl;
-		_discoveryServiceAnnouncerThreadInstance.params->run = false;
-		pthread_kill(_discoveryServiceAnnouncerThreadInstance.thread, SIGINT);
-
 		std::cout << "Hub: Shutting down discovery listener thread ..." << std::endl;
 		_discoveryServiceListenerThreadInstance.params->run = false;
 		pthread_kill(_discoveryServiceListenerThreadInstance.thread, SIGINT);
@@ -150,6 +122,19 @@ namespace tdrs {
 	 * @param[in]  link  The link
 	 */
 	void Hub::_runChainClientThread(std::string id, std::string link) {
+		bool foundId = false;
+		BOOST_FOREACH(_chainClientThread client, _chainClientThreads) {
+			if(client.params->id == id) {
+				foundId = true;
+				break;
+			}
+		}
+
+		if(foundId) {
+			std::cout << "Hub: Not launching chain client thread for link " << link << " as was launched already." << std::endl;
+			return;
+		}
+
 		std::cout << "Hub: Launching chain client thread for link " << link << " ..." << std::endl;
 
 		_chainClientThread client;
@@ -169,6 +154,9 @@ namespace tdrs {
 		pthread_create(&client.thread, &client.thattr, &Hub::_chainClient, (void *)client.params);
 
 		_chainClientThreads.push_back(client);
+
+		std::cout << "Hub: Launched chain client thread for link " << link << "." << std::endl;
+		return;
 	}
 
 	/**
@@ -222,15 +210,18 @@ namespace tdrs {
 	}
 
 	peerMessage *Hub::_parsePeerMessage(const std::string &message) {
-		std::regex messageSearchRegex("PEER:(.+):(.+):([0-9\\.]+):([0-9]+):(.+)");
+		// PEER:<event>:<id>:<pub proto>:<pub addr>:<pub port>:<sub proto>:<sub addr>:<sub port>:<key>
+		std::regex messageSearchRegex("PEER:([a-zA-Z]+):([a-zA-Z0-9]+):([a-zA-Z]+):([0-9\\.]+):([0-9]+):([a-zA-Z]+):([0-9\\.]+):([0-9]+):(.+)");
 		std::smatch match;
 
 		if(std::regex_search(message.begin(), message.end(), match, messageSearchRegex)) {
 			peerMessage *pm = new peerMessage;
 
-			pm->id = match[1];
-			pm->link = match[2].str() + "://" + match[3].str() + (match[4].str() != "" ? (":" + match[4].str()) : "");
-			pm->key = match[5];
+			pm->event = match[1];
+			pm->id = match[2];
+			pm->publisher = match[3].str() + "://" + match[4].str() + (match[5].str() != "" ? (":" + match[5].str()) : "");
+			pm->receiver = match[6].str() + "://" + match[7].str() + (match[8].str() != "" ? (":" + match[8].str()) : "");
+			pm->key = match[9];
 
 			return pm;
 		}
@@ -333,6 +324,7 @@ namespace tdrs {
 		// Run loop
 		while(_runLoop == true) {
 			zmq::message_t zmqReceiverMessageIncoming;
+			std::string zmqReceiverMessageOutgoingString;
 
 			try {
 				_zmqReceiverSocket.recv(&zmqReceiverMessageIncoming);
@@ -354,11 +346,10 @@ namespace tdrs {
 
 				if(discoveredPeer != NULL) {
 					std::cout << "Hub: Running new chain client thread for announced peer ..." << std::endl;
-					_runChainClientThread(discoveredPeer->id, discoveredPeer->link);
+					_runChainClientThread(discoveredPeer->id, discoveredPeer->publisher);
 					delete discoveredPeer;
 				}
 
-				continue;
 			}
 
 			std::string hashedMessage = Hub::hashString(&zmqReceiverMessageIncomingString);
@@ -381,7 +372,6 @@ namespace tdrs {
 			zmq::message_t zmqIpcMessageOutgoing(zmqReceiverMessageIncoming.size());
 			memcpy(zmqIpcMessageOutgoing.data(), zmqReceiverMessageIncoming.data(), zmqReceiverMessageIncoming.size());
 
-			std::string zmqReceiverMessageOutgoingString;
 			try {
 				_zmqHubSocket.send(zmqIpcMessageOutgoing);
 				zmqReceiverMessageOutgoingString = "OOK " + hashedMessage;

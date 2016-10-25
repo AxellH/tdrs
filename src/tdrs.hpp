@@ -28,8 +28,10 @@ namespace tdrs {
 	};
 
 	struct peerMessage {
+		std::string event;
 		std::string id;
-		std::string link;
+		std::string publisher;
+		std::string receiver;
 		std::string key;
 	};
 
@@ -66,6 +68,7 @@ namespace tdrs {
 	 * @brief      Parameters struct for service discovery listener thread.
 	 */
 	struct _discoveryServiceListenerParams {
+		std::string publisher;
 		std::string receiver;
 		std::string key;
 		bool run;
@@ -78,24 +81,6 @@ namespace tdrs {
 		pthread_t thread;
 		pthread_attr_t thattr;
 		_discoveryServiceListenerParams *params;
-	};
-
-	/**
-	 * @brief      Parameters struct for service discovery announcer thread.
-	 */
-	struct _discoveryServiceAnnouncerParams {
-		std::string publisher;
-		std::string key;
-		bool run;
-	};
-
-	/**
-	 * @brief      Discovery service announcer thread struct, containing the thread itself and the parameters.
-	 */
-	struct _discoveryServiceAnnouncerThread {
-		pthread_t thread;
-		pthread_attr_t thattr;
-		_discoveryServiceAnnouncerParams *params;
 	};
 
 	/**
@@ -171,19 +156,6 @@ namespace tdrs {
 			 * @return     NULL
 			 */
 			static void *_discoveryServiceListener(void *discoveryServiceListenerParams);
-
-			/**
-			 * Instance storing discovery service announcer thread struct.
-			 */
-			_discoveryServiceAnnouncerThread _discoveryServiceAnnouncerThreadInstance;
-			/**
-			 * @brief      The discovery service announcer; static method instantiated as an own thread.
-			 *
-			 * @param      discoveryServiceParamsListener  The discovery service listener parameters (struct)
-			 *
-			 * @return     NULL
-			 */
-			static void *_discoveryServiceAnnouncer(void *discoveryServiceAnnouncerParams);
 
 			/**
 			 * @brief      Method for running discovery service thread.
@@ -291,35 +263,6 @@ namespace tdrs {
 			 */
 			HubDiscoveryServiceListener(_discoveryServiceListenerParams *params);
 			// ~HubDiscoveryServiceListener();
-
-			/**
-			 * @brief      Requests an exit of the run-loop on its next iteration.
-			 */
-			void shutdown();
-			/**
-			 * @brief      Runs the discovery service.
-			 */
-			void run();
-	};
-
-	/**
-	 * @brief      Class for HubDiscoveryServiceAnnouncer.
-	 */
-	class HubDiscoveryServiceAnnouncer {
-		private:
-			_discoveryServiceAnnouncerParams *_params;
-			/**
-			 * The run-loop variable.
-			 */
-			bool _runLoop;
-		public:
-			/**
-			 * @brief      Constructs the object.
-			 *
-			 * @param[in]  ctxn  The number of context IO threads
-			 */
-			HubDiscoveryServiceAnnouncer(_discoveryServiceAnnouncerParams *params);
-			// ~HubDiscoveryServiceAnnouncer();
 
 			/**
 			 * @brief      Requests an exit of the run-loop on its next iteration.

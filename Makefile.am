@@ -11,5 +11,4 @@ tdrs_SOURCES = \
   src/hub.cpp \
   src/hub_chain_client.cpp \
   src/hub_discovery_service_listener.cpp \
-  src/hub_discovery_service_announcer.cpp \
   src/tdrs.hpp

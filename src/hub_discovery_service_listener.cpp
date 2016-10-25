@@ -22,6 +22,8 @@ namespace tdrs {
 	void HubDiscoveryServiceListener::run() {
 		std::cout << "DL: Running discovery service listener ..." << std::endl;
 
+		zeroAddress *publisherAddress = Hub::parseZeroAddress(_params->publisher);
+		zeroAddress *receiverAddress = Hub::parseZeroAddress(_params->receiver);
 		zmq::context_t zmqContext(1);
 
 		std::cout << "DL: Connecting to receiver at " << _params->receiver << " ..." << std::endl;
@@ -34,7 +36,13 @@ namespace tdrs {
 		std::cout << "DL: Adding node for discovery service listener ..." << std::endl;
 		_zyreListenerNode = zyre::node_t(zsys_hostname());
 		std::cout << "DL: Setting header to discovery service listener ..." << std::endl;
-		_zyreListenerNode.set_header("X-HELLO", "World");
+		_zyreListenerNode.set_header("X-PUB-PTCL", publisherAddress->protocol);
+		_zyreListenerNode.set_header("X-PUB-ADDR", publisherAddress->address);
+		_zyreListenerNode.set_header("X-PUB-PORT", publisherAddress->port);
+		_zyreListenerNode.set_header("X-REC-PTCL", receiverAddress->protocol);
+		_zyreListenerNode.set_header("X-REC-ADDR", receiverAddress->address);
+		_zyreListenerNode.set_header("X-REC-PORT", receiverAddress->port);
+		_zyreListenerNode.set_header("X-KEY", _params->key);
 		// _zyreListenerNode.set_verbose();
 		std::cout << "DL: Starting node for discovery service listener ..." << std::endl;
 		_zyreListenerNode.start();
@@ -46,32 +54,56 @@ namespace tdrs {
 			zyre::event_t zyreEvent = _zyreListenerNode.event();
 
 			std::cout << "DL: Got discovery service event ..." << std::endl;
-			std::string eventType = zyreEvent.type();
-			std::string eventSenderId = zyreEvent.sender();
-			std::string eventSenderName = zyreEvent.name();
-			std::string eventSenderAddressZyre = zyreEvent.address();
-			std::string eventSenderAddress = zyreEvent.header_value("X-ADDRESS");
-			std::string eventSenderPort = zyreEvent.header_value("X-PORT");
-			std::string eventSenderKey = zyreEvent.header_value("X-KEY");
-			std::string eventGroup = zyreEvent.group();
-
-			std::cout << "DL: type: " << zyreEvent.type() << std::endl;
-			std::cout << "DL: sender: " << zyreEvent.sender() << std::endl;
-			std::cout << "DL: name: " << zyreEvent.name() << std::endl;
-			std::cout << "DL: address: " << zyreEvent.address() << std::endl;
-			std::cout << "DL: group: " << zyreEvent.group() << std::endl;
-			std::cout << "DL: header: " << zyreEvent.header_value("X-KEY") << std::endl;
+			std::string eventType                    = zyreEvent.type();
+			std::string eventSenderId                = zyreEvent.sender();
+			std::string eventSenderName              = zyreEvent.name();
+			std::string eventSenderAddressZyre       = zyreEvent.address();
+			std::string eventSenderPublisherProtocol = zyreEvent.header_value("X-PUB-PTCL");
+			std::string eventSenderPublisherAddress  = zyreEvent.header_value("X-PUB-ADDR");
+			std::string eventSenderPublisherPort     = zyreEvent.header_value("X-PUB-PORT");
+			std::string eventSenderReceiverProtocol  = zyreEvent.header_value("X-REC-PTCL");
+			std::string eventSenderReceiverAddress   = zyreEvent.header_value("X-REC-ADDR");
+			std::string eventSenderReceiverPort      = zyreEvent.header_value("X-REC-PORT");
+			std::string eventSenderKey               = zyreEvent.header_value("X-KEY");
+			std::string eventGroup                   = zyreEvent.group();
 
 			if(eventType == "ENTER") {
 				// TODO: Check eventSenderKey
 
-				zeroAddress *address = Hub::parseZeroAddress(eventSenderAddressZyre);
-				std::string message = "PEER:" + eventSenderId + ":" + address->protocol + ":" + address->address + ":" + eventSenderPort + ":" + eventSenderKey;
+				zeroAddress *eventSenderZyreAddress = Hub::parseZeroAddress(eventSenderAddressZyre);
+				std::string message = "PEER:ENTER:" + eventSenderId + \
+										":" + eventSenderPublisherProtocol + \
+										":" + eventSenderZyreAddress->address + \
+										":" + eventSenderPublisherPort + \
+										":" + eventSenderReceiverProtocol + \
+										":" + eventSenderZyreAddress->address + \
+										":" + eventSenderReceiverPort + \
+										":" + eventSenderKey;
 
 				zmq::message_t zmqSenderMessageOutgoing(message.size());
 				memcpy(zmqSenderMessageOutgoing.data(), message.c_str(), message.size());
 
 				_zmqSenderSocket.send(zmqSenderMessageOutgoing);
+
+				zmq::message_t zmqSenderMessageIncoming;
+				try {
+					_zmqSenderSocket.recv(&zmqSenderMessageIncoming);
+				} catch(...) {
+					continue;
+				}
+
+				std::string zmqSenderMessageIncomingString(
+					static_cast<const char*>(zmqSenderMessageIncoming.data()),
+					zmqSenderMessageIncoming.size()
+				);
+
+				if(zmqSenderMessageIncomingString.substr(0, 3) == "OOK") {
+					std::cout << "DL: Chain client launch successful." << std::endl;
+				} else {
+					std::cout << "DL: Chain client launch failed!" << std::endl;
+				}
+			} else if(eventType == "EXIT") {
+
 			}
 
 			// zyreEvent.print();

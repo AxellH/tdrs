@@ -210,8 +210,8 @@ namespace tdrs {
 	}
 
 	peerMessage *Hub::_parsePeerMessage(const std::string &message) {
-		// PEER:<event>:<id>:<pub proto>:<pub addr>:<pub port>:<sub proto>:<sub addr>:<sub port>:<key>
-		std::regex messageSearchRegex("PEER:([a-zA-Z]+):([a-zA-Z0-9]+):([a-zA-Z]+):([0-9\\.]+):([0-9]+):([a-zA-Z]+):([0-9\\.]+):([0-9]+):(.+)");
+		// PEER:<event>:<id>:<pub proto>:<pub addr>:<pub port>:<sub proto>:<sub addr>:<sub port>
+		std::regex messageSearchRegex("PEER:([a-zA-Z]+):([a-zA-Z0-9]+):([a-zA-Z\\*]+):([0-9\\.\\*]+):([0-9\\*]+):([a-zA-Z\\*]+):([0-9\\.\\*]+):([0-9\\*]+)");
 		std::smatch match;
 
 		if(std::regex_search(message.begin(), message.end(), match, messageSearchRegex)) {
@@ -221,7 +221,6 @@ namespace tdrs {
 			pm->id = match[2];
 			pm->publisher = match[3].str() + "://" + match[4].str() + (match[5].str() != "" ? (":" + match[5].str()) : "");
 			pm->receiver = match[6].str() + "://" + match[7].str() + (match[8].str() != "" ? (":" + match[8].str()) : "");
-			pm->key = match[9];
 
 			return pm;
 		}

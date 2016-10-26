@@ -32,7 +32,6 @@ namespace tdrs {
 		std::string id;
 		std::string publisher;
 		std::string receiver;
-		std::string key;
 	};
 
 	/**

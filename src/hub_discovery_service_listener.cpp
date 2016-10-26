@@ -58,6 +58,7 @@ namespace tdrs {
 			std::string eventSenderId                = zyreEvent.sender();
 			std::string eventSenderName              = zyreEvent.name();
 			std::string eventSenderAddressZyre       = zyreEvent.address();
+			zeroAddress *eventSenderZyreAddress 	 = Hub::parseZeroAddress(eventSenderAddressZyre);
 			std::string eventSenderPublisherProtocol = zyreEvent.header_value("X-PUB-PTCL");
 			std::string eventSenderPublisherAddress  = zyreEvent.header_value("X-PUB-ADDR");
 			std::string eventSenderPublisherPort     = zyreEvent.header_value("X-PUB-PORT");
@@ -67,46 +68,55 @@ namespace tdrs {
 			std::string eventSenderKey               = zyreEvent.header_value("X-KEY");
 			std::string eventGroup                   = zyreEvent.group();
 
-			if(eventType == "ENTER") {
-				// TODO: Check eventSenderKey
+			// zyreEvent.print();
 
-				zeroAddress *eventSenderZyreAddress = Hub::parseZeroAddress(eventSenderAddressZyre);
-				std::string message = "PEER:ENTER:" + eventSenderId + \
+			std::string message;
+
+			// TODO: Check eventSenderKey
+
+			if(eventType == "ENTER") {
+				message = "PEER:ENTER:" + eventSenderId + \
 										":" + eventSenderPublisherProtocol + \
 										":" + eventSenderZyreAddress->address + \
 										":" + eventSenderPublisherPort + \
 										":" + eventSenderReceiverProtocol + \
 										":" + eventSenderZyreAddress->address + \
-										":" + eventSenderReceiverPort + \
-										":" + eventSenderKey;
-
-				zmq::message_t zmqSenderMessageOutgoing(message.size());
-				memcpy(zmqSenderMessageOutgoing.data(), message.c_str(), message.size());
-
-				_zmqSenderSocket.send(zmqSenderMessageOutgoing);
-
-				zmq::message_t zmqSenderMessageIncoming;
-				try {
-					_zmqSenderSocket.recv(&zmqSenderMessageIncoming);
-				} catch(...) {
-					continue;
-				}
-
-				std::string zmqSenderMessageIncomingString(
-					static_cast<const char*>(zmqSenderMessageIncoming.data()),
-					zmqSenderMessageIncoming.size()
-				);
-
-				if(zmqSenderMessageIncomingString.substr(0, 3) == "OOK") {
-					std::cout << "DL: Chain client launch successful." << std::endl;
-				} else {
-					std::cout << "DL: Chain client launch failed!" << std::endl;
-				}
+										":" + eventSenderReceiverPort;
 			} else if(eventType == "EXIT") {
-
+				message = "PEER:EXIT:" + eventSenderId + \
+										":*" \
+										":*" \
+										":*" \
+										":*" \
+										":*" \
+										":*" ;
+			} else {
+				continue;
 			}
 
-			// zyreEvent.print();
+
+			zmq::message_t zmqSenderMessageOutgoing(message.size());
+			memcpy(zmqSenderMessageOutgoing.data(), message.c_str(), message.size());
+
+			_zmqSenderSocket.send(zmqSenderMessageOutgoing);
+
+			zmq::message_t zmqSenderMessageIncoming;
+			try {
+				_zmqSenderSocket.recv(&zmqSenderMessageIncoming);
+			} catch(...) {
+				continue;
+			}
+
+			std::string zmqSenderMessageIncomingString(
+				static_cast<const char*>(zmqSenderMessageIncoming.data()),
+				zmqSenderMessageIncoming.size()
+			);
+
+			if(zmqSenderMessageIncomingString.substr(0, 3) == "OOK") {
+				std::cout << "DL: Receiver responded with success." << std::endl;
+			} else {
+				std::cout << "DL: Receiver responded with failure!" << std::endl;
+			}
 		}
 
 		std::cout << "DL: Leaving group ..." << std::endl;

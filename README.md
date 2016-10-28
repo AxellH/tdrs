@@ -60,7 +60,7 @@ Options::
 $ ./tdrs --receiver-listen "tcp://*:19890" --publisher-listen "tcp://*:19891"
 ```
 
-## Static multi-link
+### Static multi-link
 
 ```bash
 $ ./tdrs --receiver-listen "tcp://*:19790" --publisher-listen "tcp://*:19791" --chain-link "tcp://127.0.0.1:19891" --chain-link "tcp://127.0.0.1:19991"

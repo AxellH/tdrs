@@ -42,9 +42,7 @@ ADD . .
 RUN autoreconf -fi \
  && ./configure \
  && make \
- && mv ./tdrs /usr/local/bin/tdrs
+ && mv ./tdrs /usr/local/bin/tdrs \
+ && mv ./docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-EXPOSE 8080
-
-# TODO: Not yet fully implemented
-CMD ["/usr/local/bin/tdrs", "--receiver-listen", "tcp://*:19790", "--publisher-listen", "tcp://*:19791"]
+CMD ["/usr/local/bin/docker-entrypoint.sh"]

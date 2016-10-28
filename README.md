@@ -88,6 +88,14 @@ $ ./tdrs --receiver-listen "tcp://*:19890" --publisher-listen "tcp://*:19891" --
 ./tdrs --receiver-listen "tcp://*:19990" --publisher-listen "tcp://*:19991" --discovery
 ```
 
+### Docker
+
+Docker usage is similar to command line usage. All available options are being translated to environment-variables:
+
+```bash
+docker run -it --name tdrs -e TDRS_RECEIVER_LISTEN="tcp://*:19790" -e TDRS_PUBLISHER_LISTEN="tcp://*:19791" -e TDRS_DISCOVERY=true weltraum/tdrs
+```
+
 ## What does `TDRS` stand for?
 
 It stands for ["Tracking and data relay satellite"](https://en.wikipedia.org/wiki/Tracking_and_data_relay_satellite). We at [Weltraum](https://weltraum.co) like to give our components names that sort of fit their function inside our infrastructure, from an astronautics point of view.

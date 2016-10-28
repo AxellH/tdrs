@@ -124,7 +124,7 @@ namespace tdrs {
 
 		hubChainClient.run();
 
-		pthread_cleanup_pop(chainClientParams);
+		pthread_cleanup_pop(0);
 		return NULL;
 	}
 

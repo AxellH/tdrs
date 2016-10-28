@@ -3,6 +3,7 @@ FROM alpine:latest
 RUN echo "@testing http://dl-4.alpinelinux.org/alpine/edge/testing" >> /etc/apk/repositories \
  && apk update \
  && apk add --no-cache \
+ 	bash \
  	file \
 	build-base \
 	make \
@@ -43,6 +44,20 @@ RUN autoreconf -fi \
  && ./configure \
  && make \
  && mv ./tdrs /usr/local/bin/tdrs \
- && mv ./docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ && mv ./docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh \
+ && chmod +x /usr/local/bin/docker-entrypoint.sh \
+ && make clean
+
+WORKDIR /
+RUN rm -Rf /build/czmq /build/zyre /build/tdrs/src /build/tdrs/m4 /build/tdrs/ext \
+ && apk del \
+ 	file \
+	build-base \
+	make \
+	g++ \
+	autoconf \
+	automake \
+	libtool \
+	git
 
 CMD ["/usr/local/bin/docker-entrypoint.sh"]

@@ -30,6 +30,7 @@ namespace tdrs {
 		zmq::socket_t _zmqSenderSocket(zmqContext, ZMQ_REQ);
 		_zmqSenderSocket.setsockopt(ZMQ_LINGER, &_zmqSenderSocketLinger, sizeof(_zmqSenderSocketLinger));
 		_zmqSenderSocket.connect(_params->receiver);
+		_params->senderSocket = &_zmqSenderSocket;
 
 		std::cout << "Chain[" << _params->link << "]: Connected to receiver." << std::endl;
 
@@ -40,6 +41,7 @@ namespace tdrs {
 		_zmqSubscriberSocket.setsockopt(ZMQ_IDENTITY, "hub", 3);
 		_zmqSubscriberSocket.setsockopt(ZMQ_SUBSCRIBE, "", 0);
 		_zmqSubscriberSocket.connect(_params->link);
+		_params->subscriberSocket = &_zmqSubscriberSocket;
 		std::cout << "Chain[" << _params->link << "]: Subscribed to link publisher." << std::endl;
 
 		while(_params->run == true) {

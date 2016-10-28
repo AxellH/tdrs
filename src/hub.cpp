@@ -11,6 +11,11 @@ namespace tdrs {
 	 */
 	Hub::Hub(int ctxn) : _zmqContext(ctxn), _zmqHubSocket(_zmqContext, ZMQ_PUB), _zmqReceiverSocket(_zmqContext, ZMQ_REP) {
 		_runLoop = true;
+		_optionDiscovery = false;
+		_optionDiscoveryPort = 5670;
+		_optionDiscoveryInterval = 1000;
+		_optionDiscoveryGroup = "TDRS";
+		_optionDiscoveryKey = "TDRS";
 	}
 
 	/**
@@ -81,7 +86,11 @@ namespace tdrs {
 		_discoveryServiceListenerThreadInstance.params = new _discoveryServiceListenerParams;
 		_discoveryServiceListenerThreadInstance.params->receiver = _rewriteReceiver(&_optionReceiverListen);
 		_discoveryServiceListenerThreadInstance.params->publisher = _optionPublisherListen;
-		_discoveryServiceListenerThreadInstance.params->key = "ABC"; // TODO: Get from options
+		_discoveryServiceListenerThreadInstance.params->interface = _optionDiscoveryInterface;
+		_discoveryServiceListenerThreadInstance.params->port = _optionDiscoveryPort;
+		_discoveryServiceListenerThreadInstance.params->interval = _optionDiscoveryInterval;
+		_discoveryServiceListenerThreadInstance.params->group = _optionDiscoveryGroup;
+		_discoveryServiceListenerThreadInstance.params->key = _optionDiscoveryKey;
 		_discoveryServiceListenerThreadInstance.params->run = true;
 
 		pthread_attr_init(&_discoveryServiceListenerThreadInstance.thattr);
@@ -111,8 +120,29 @@ namespace tdrs {
 		_chainClientParams *params = static_cast<_chainClientParams*>(chainClientParams);
 		tdrs::HubChainClient hubChainClient(1, params);
 
+		pthread_cleanup_push(&Hub::_chainClientCleanup, chainClientParams);
+
 		hubChainClient.run();
+
+		pthread_cleanup_pop(chainClientParams);
 		return NULL;
+	}
+
+	/**
+	 * @brief      The chain client cleanup; static method for cleaning up the thread.
+	 *
+	 * @param      chainClientParams  The chain client parameters (struct)
+	 *
+	 * @return     NULL
+	 */
+	void Hub::_chainClientCleanup(void *chainClientParams) {
+		_chainClientParams *params = static_cast<_chainClientParams*>(chainClientParams);
+
+		std::cout << "Chain[" << params->link << "]: Thread cancelled! Cleaning up ..." << std::endl;
+		params->subscriberSocket->close();
+		params->senderSocket->close();
+		delete params;
+		std::cout << "Chain[cleaned]: Thread cleaned up." << std::endl;
 	}
 
 	/**
@@ -176,6 +206,27 @@ namespace tdrs {
 	}
 
 	/**
+	 * @brief      Method for shutting down one running chain client thread.
+	 */
+	bool Hub::_shutdownChainClientThread(std::string id) {
+		bool wasShutDown = false;
+
+		BOOST_FOREACH(_chainClientThread client, _chainClientThreads) {
+			if(client.params->id == id) {
+				std::cout << "Hub: Shutting down chain client thread for link " << client.params->link << " ..." << std::endl;
+
+				client.params->run = false;
+
+				pthread_cancel(client.thread);
+				wasShutDown = true;
+				break;
+			}
+		}
+
+		return wasShutDown;
+	}
+
+	/**
 	 * @brief      Method for shutting down all running chain client threads.
 	 */
 	void Hub::_shutdownChainClientThreads() {
@@ -184,7 +235,7 @@ namespace tdrs {
 
 			client.params->run = false;
 
-			pthread_kill(client.thread, SIGINT);
+			pthread_cancel(client.thread);
 		}
 	}
 
@@ -204,11 +255,26 @@ namespace tdrs {
 		return hashed;
 	}
 
+	/**
+	 * @brief      Method for rewriting a receiver address if necessarry.
+	 *
+	 * @param      receiver  The receiver address
+	 *
+	 * @return     The rewritten address
+	 */
 	std::string Hub::_rewriteReceiver(std::string *receiver) {
 		std::regex receiverReplaceRegex("(\\*|0\\.0\\.0\\.0)");
 		return std::regex_replace(_optionReceiverListen, receiverReplaceRegex, "127.0.0.1");
 	}
 
+	/**
+	 * @brief      Static method for parsing a peer message into
+	 * peerMessage type.
+	 *
+	 * @param[in]  message  The message
+	 *
+	 * @return     The peerMessage
+	 */
 	peerMessage *Hub::_parsePeerMessage(const std::string &message) {
 		// PEER:<event>:<id>:<pub proto>:<pub addr>:<pub port>:<sub proto>:<sub addr>:<sub port>
 		std::regex messageSearchRegex("PEER:([a-zA-Z]+):([a-zA-Z0-9]+):([a-zA-Z\\*]+):([0-9\\.\\*]+):([0-9\\*]+):([a-zA-Z\\*]+):([0-9\\.\\*]+):([0-9\\*]+)");
@@ -228,6 +294,14 @@ namespace tdrs {
 		return NULL;
 	}
 
+	/**
+	 * @brief      Static method for parsing a ZeroMQ address string into
+	 * zeroAddress type.
+	 *
+	 * @param[in]  address  The address
+	 *
+	 * @return     The zeroAddress
+	 */
 	zeroAddress *Hub::parseZeroAddress(const std::string &address) {
 		std::regex addressSearchRegex("(.+):\\/\\/([0-9\\.\\*]+):?([0-9]*)");
 		std::smatch match;
@@ -261,18 +335,24 @@ namespace tdrs {
 				("receiver-listen", bpo::value<std::string>(), "set listener for receiver")
 				("publisher-listen", bpo::value<std::string>(), "set listener for publisher")
 				("chain-link", bpo::value<std::vector<std::string> >(&_optionChainLinks)->multitoken(), "add a chain link, specify one per link")
+				("discovery", "enable auto discovery of chain links")
+				("discovery-interval", bpo::value<size_t>(), "set the auto discovery interval (ms), default 1000")
+				("discovery-interface", bpo::value<std::string>(), "set the network interface to be used for auto discovery, e.g. eth0")
+				("discovery-port", bpo::value<int>(), "set the UDP port to be used for auto discovery, default 5670")
+				// ("discovery-group", bpo::value<std::string>(), "set the auto discovery group name, default 'TDRS'")
+				("discovery-key", bpo::value<std::string>(), "set the auto discovery key, default 'TDRS'")
 			;
 
 			bpo::variables_map variablesMap;
 			bpo::store(bpo::parse_command_line(argc, argv, optionsDescription), variablesMap);
 			bpo::notify(variablesMap);
 
-			if (variablesMap.count("help")) {
+			if(variablesMap.count("help")) {
 				std::cout << optionsDescription << std::endl;
 				return false;
 			}
 
-			if (variablesMap.count("receiver-listen")) {
+			if(variablesMap.count("receiver-listen")) {
 				_optionReceiverListen = variablesMap["receiver-listen"].as<std::string>();
 				std::cout << "Hub: Listener for receiver was set to " << _optionReceiverListen << std::endl;
 			} else {
@@ -281,13 +361,48 @@ namespace tdrs {
 				return false;
 			}
 
-			if (variablesMap.count("publisher-listen")) {
+			if(variablesMap.count("publisher-listen")) {
 				_optionPublisherListen = variablesMap["publisher-listen"].as<std::string>();
 				std::cout << "Hub: Listener for publisher was set to " << _optionPublisherListen << std::endl;
 			} else {
 				std::cout << "Hub: Listener for publisher (--publisher-listen) was not set!" << std::endl << std::endl;
 				std::cout << optionsDescription << std::endl;
 				return false;
+			}
+
+			if(variablesMap.count("discovery")) {
+				if(variablesMap.count("chain-link")) {
+					std::cout << "Hub: Error, cannot manually add chain links while --discovery is enabled. Use either --discovery or --chain-link." << std::endl;
+					return false;
+				}
+
+				_optionDiscovery = true;
+				std::cout << "Hub: Auto discovery was enabled." << std::endl;
+			}
+
+			if(variablesMap.count("discovery-interval")) {
+				_optionDiscoveryInterval = variablesMap["discovery-interval"].as<size_t>();
+				std::cout << "Hub: Auto discovery interval was set to " << _optionDiscoveryInterval << std::endl;
+			}
+
+			if(variablesMap.count("discovery-interface")) {
+				_optionDiscoveryInterface = variablesMap["discovery-interface"].as<std::string>();
+				std::cout << "Hub: Auto discovery interface was set to " << _optionDiscoveryInterface << std::endl;
+			}
+
+			if(variablesMap.count("discovery-port")) {
+				_optionDiscoveryPort = variablesMap["discovery-port"].as<int>();
+				std::cout << "Hub: Auto discovery port was set to " << _optionDiscoveryPort << std::endl;
+			}
+
+			// if(variablesMap.count("discovery-group")) {
+			// 	_optionDiscoveryGroup = variablesMap["discovery-group"].as<std::string>();
+			// 	std::cout << "Hub: Auto discovery group was set to " << _optionDiscoveryGroup << std::endl;
+			// }
+
+			if(variablesMap.count("discovery-key")) {
+				_optionDiscoveryKey = variablesMap["discovery-key"].as<std::string>();
+				std::cout << "Hub: Auto discovery key was set to " << _optionDiscoveryKey << std::endl;
 			}
 		} catch(...) {
 			return false;
@@ -300,7 +415,6 @@ namespace tdrs {
 	 * @brief      Requests an exit of the run-loop on its next iteration.
 	 */
 	void Hub::shutdown() {
-
 		_runLoop = false;
 	}
 
@@ -313,15 +427,20 @@ namespace tdrs {
 		// Bind the receiver
 		_bindReceiver();
 
-		// Run the discovery service threads
-		_runDisoveryServiceThreads();
-
-		// Run chain client threads
-		_runChainClientThreads();
+		if(_optionDiscovery == true) {
+			// Run the discovery service threads
+			_runDisoveryServiceThreads();
+		} else {
+			// Run chain client threads
+			_runChainClientThreads();
+		}
 
 		std::cout << "Hub: Launching run-loop ..." << std::endl;
+
 		// Run loop
+		bool propagateMessage = true;
 		while(_runLoop == true) {
+			propagateMessage = true;
 			zmq::message_t zmqReceiverMessageIncoming;
 			std::string zmqReceiverMessageOutgoingString;
 
@@ -344,40 +463,50 @@ namespace tdrs {
 				peerMessage *discoveredPeer = Hub::_parsePeerMessage(zmqReceiverMessageIncomingString);
 
 				if(discoveredPeer != NULL) {
-					std::cout << "Hub: Running new chain client thread for announced peer ..." << std::endl;
-					_runChainClientThread(discoveredPeer->id, discoveredPeer->publisher);
+					if(discoveredPeer->event == "ENTER") {
+						std::cout << "Hub: Running new chain client thread for announced peer ..." << std::endl;
+						_runChainClientThread(discoveredPeer->id, discoveredPeer->publisher);
+					} else if(discoveredPeer->event == "EXIT") {
+						std::cout << "Hub: Exiting chain client thread for peer ..." << std::endl;
+						if(!_shutdownChainClientThread(discoveredPeer->id)) {
+							std::cout << "Hub: Chain client thread was not available. Not propagating peer announcement!" << std::endl;
+							propagateMessage = false;
+							zmqReceiverMessageOutgoingString = "NOK NOT AVAILABLE";
+						}
+					}
 					delete discoveredPeer;
 				}
-
 			}
 
-			std::string hashedMessage = Hub::hashString(&zmqReceiverMessageIncomingString);
-			std::cout << "Hub: Hashed message: " << hashedMessage << std::endl;
+			if(propagateMessage) {
+				std::string hashedMessage = Hub::hashString(&zmqReceiverMessageIncomingString);
+				std::cout << "Hub: Hashed message: " << hashedMessage << std::endl;
 
-			std::cout << "Hub: Adding hashed message to shared message vector ..." << std::endl;
-			pthread_mutex_lock(&_sharedMessageVectorMutex);
-			BOOST_FOREACH(_chainClientThread client, _chainClientThreads) {
-				_sharedMessageEntry entry;
-				entry.hash = hashedMessage;
-				entry.link = client.params->link;
+				std::cout << "Hub: Adding hashed message to shared message vector ..." << std::endl;
+				pthread_mutex_lock(&_sharedMessageVectorMutex);
+				BOOST_FOREACH(_chainClientThread client, _chainClientThreads) {
+					_sharedMessageEntry entry;
+					entry.hash = hashedMessage;
+					entry.link = client.params->link;
 
-				_sharedMessageVector.push_back(entry);
-				std::cout << "Hub: Hash for " << client.params->link << " added to shared message vector." << std::endl;
-			}
-			pthread_mutex_unlock(&_sharedMessageVectorMutex);
-			std::cout << "Hub: Added hashed message to shared message vector." << std::endl;
+					_sharedMessageVector.push_back(entry);
+					std::cout << "Hub: Hash for " << client.params->link << " added to shared message vector." << std::endl;
+				}
+				pthread_mutex_unlock(&_sharedMessageVectorMutex);
+				std::cout << "Hub: Added hashed message to shared message vector." << std::endl;
 
-			std::cout << "Hub: Forwarding message to Hub subscribers ..." << std::endl;
-			zmq::message_t zmqIpcMessageOutgoing(zmqReceiverMessageIncoming.size());
-			memcpy(zmqIpcMessageOutgoing.data(), zmqReceiverMessageIncoming.data(), zmqReceiverMessageIncoming.size());
+				std::cout << "Hub: Forwarding message to Hub subscribers ..." << std::endl;
+				zmq::message_t zmqIpcMessageOutgoing(zmqReceiverMessageIncoming.size());
+				memcpy(zmqIpcMessageOutgoing.data(), zmqReceiverMessageIncoming.data(), zmqReceiverMessageIncoming.size());
 
-			try {
-				_zmqHubSocket.send(zmqIpcMessageOutgoing);
-				zmqReceiverMessageOutgoingString = "OOK " + hashedMessage;
-				std::cout << "Hub: Forwarding successful." << std::endl;
-			} catch(...) {
-				zmqReceiverMessageOutgoingString = "NOK " + hashedMessage;
-				std::cout << "Hub: Forwarding failed!" << std::endl;
+				try {
+					_zmqHubSocket.send(zmqIpcMessageOutgoing);
+					zmqReceiverMessageOutgoingString = "OOK " + hashedMessage;
+					std::cout << "Hub: Forwarding successful." << std::endl;
+				} catch(...) {
+					zmqReceiverMessageOutgoingString = "NOK " + hashedMessage;
+					std::cout << "Hub: Forwarding failed!" << std::endl;
+				}
 			}
 
 			std::cout << "Hub: Preparing response to initiator ..." << std::endl;
@@ -391,11 +520,13 @@ namespace tdrs {
 
 		std::cout << std::endl;
 
-		// Shutdown chain client threads
-		_shutdownChainClientThreads();
+		if(_optionDiscovery == true) {
+			// Shutdown the discovery service threads
+			_shutdownDisoveryServiceThreads();
+		}
 
-		// Shutdown the discovery service threads
-		_shutdownDisoveryServiceThreads();
+		// Shutdown chain client threads, from auto discovery or manual setup
+		_shutdownChainClientThreads();
 
 		// Unbind the receiver
 		_unbindReceiver();

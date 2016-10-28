@@ -52,6 +52,8 @@ namespace tdrs {
 		pthread_mutex_t *shmsgvecmtx;
 		std::vector<_sharedMessageEntry> *shmsgvec;
 		bool run;
+		zmq::socket_t *subscriberSocket;
+		zmq::socket_t *senderSocket;
 	};
 
 	/**
@@ -69,6 +71,10 @@ namespace tdrs {
 	struct _discoveryServiceListenerParams {
 		std::string publisher;
 		std::string receiver;
+		std::string interface;
+		int port;
+		size_t interval;
+		std::string group;
 		std::string key;
 		bool run;
 	};
@@ -125,6 +131,30 @@ namespace tdrs {
 			 * Option: --chain-link
 			 */
 			std::vector<std::string> _optionChainLinks;
+			/**
+			 * Option: --discovery
+			 */
+			bool _optionDiscovery;
+			/**
+			 * Option: --discovery-port
+			 */
+			int _optionDiscoveryPort;
+			/**
+			 * Option: --discovery-interface
+			 */
+			std::string _optionDiscoveryInterface;
+			/**
+			 * Option: --discovery-interval
+			 */
+			size_t _optionDiscoveryInterval;
+			/**
+			 * Option: --discovery-group
+			 */
+			std::string _optionDiscoveryGroup;
+			/**
+			 * Option: --discovery-key
+			 */
+			std::string _optionDiscoveryKey;
 
 			/**
 			 * @brief      Binds the publisher.
@@ -178,6 +208,14 @@ namespace tdrs {
 			 * @return     NULL
 			 */
 			static void *_chainClient(void *chainClientParams);
+			/**
+			 * @brief      The chain client cleanup; static method for cleaning up the thread.
+			 *
+			 * @param      chainClientParams  The chain client parameters (struct)
+			 *
+			 * @return     NULL
+			 */
+			static void _chainClientCleanup(void *chainClientParams);
 
 			/**
 			 * @brief      Method for running one chain client thread.
@@ -190,6 +228,10 @@ namespace tdrs {
 			 * @brief      Method for running all required chain client threads.
 			 */
 			void _runChainClientThreads();
+			/**
+			 * @brief      Method for shutting down one running chain client thread.
+			 */
+			bool _shutdownChainClientThread(std::string id);
 			/**
 			 * @brief      Method for shutting down all running chain client threads.
 			 */
@@ -204,6 +246,14 @@ namespace tdrs {
 			 */
 			std::string _rewriteReceiver(std::string *receiver);
 
+			/**
+			 * @brief      Static method for parsing a peer message into
+			 * peerMessage type.
+			 *
+			 * @param[in]  message  The message
+			 *
+			 * @return     The peerMessage
+			 */
 			static peerMessage *_parsePeerMessage(const std::string &message);
 		public:
 			/**
@@ -223,6 +273,14 @@ namespace tdrs {
 			 */
 			static std::string hashString(std::string *source);
 
+			/**
+			 * @brief      Static method for parsing a ZeroMQ address string into
+			 * zeroAddress type.
+			 *
+			 * @param[in]  address  The address
+			 *
+			 * @return     The zeroAddress
+			 */
 			static zeroAddress *parseZeroAddress(const std::string &address);
 
 			/**
@@ -304,10 +362,6 @@ namespace tdrs {
 			HubChainClient(int ctxn, _chainClientParams *params);
 			// ~HubChainClient();
 
-			/**
-			 * @brief      Requests an exit of the run-loop on its next iteration.
-			 */
-			void shutdown();
 			/**
 			 * @brief      Runs the chain client.
 			 */

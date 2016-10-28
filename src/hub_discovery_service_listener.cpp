@@ -35,6 +35,13 @@ namespace tdrs {
 		zyre::node_t _zyreListenerNode;
 		std::cout << "DL: Adding node for discovery service listener ..." << std::endl;
 		_zyreListenerNode = zyre::node_t(zsys_hostname());
+
+		if(!_params->interface.empty()) {
+			_zyreListenerNode.set_interface(_params->interface);
+		}
+		_zyreListenerNode.set_port(_params->port);
+		_zyreListenerNode.set_interval(_params->interval);
+
 		std::cout << "DL: Setting header to discovery service listener ..." << std::endl;
 		_zyreListenerNode.set_header("X-PUB-PTCL", publisherAddress->protocol);
 		_zyreListenerNode.set_header("X-PUB-ADDR", publisherAddress->address);
@@ -42,12 +49,12 @@ namespace tdrs {
 		_zyreListenerNode.set_header("X-REC-PTCL", receiverAddress->protocol);
 		_zyreListenerNode.set_header("X-REC-ADDR", receiverAddress->address);
 		_zyreListenerNode.set_header("X-REC-PORT", receiverAddress->port);
-		_zyreListenerNode.set_header("X-KEY", _params->key);
+		_zyreListenerNode.set_header("X-KEY", Hub::hashString(&_params->key));
 		// _zyreListenerNode.set_verbose();
 		std::cout << "DL: Starting node for discovery service listener ..." << std::endl;
 		_zyreListenerNode.start();
 		std::cout << "DL: Joining group as discovery service listener ..." << std::endl;
-		_zyreListenerNode.join("TDRS");
+		_zyreListenerNode.join(_params->group);
 
 		std::cout << "DL: Listening for discovery service events ..." << std::endl;
 		while(_params->run == true) {
@@ -68,13 +75,15 @@ namespace tdrs {
 			std::string eventSenderKey               = zyreEvent.header_value("X-KEY");
 			std::string eventGroup                   = zyreEvent.group();
 
-			// zyreEvent.print();
+			zyreEvent.print();
 
 			std::string message;
-
-			// TODO: Check eventSenderKey
-
 			if(eventType == "ENTER") {
+				if(Hub::hashString(&_params->key) != eventSenderKey) {
+					std::cout << "DL: Ignoring discovery service event, as key does not fit." << std::endl;
+					continue;
+				}
+
 				message = "PEER:ENTER:" + eventSenderId + \
 										":" + eventSenderPublisherProtocol + \
 										":" + eventSenderZyreAddress->address + \
@@ -91,6 +100,7 @@ namespace tdrs {
 										":*" \
 										":*" ;
 			} else {
+				std::cout << "DL: Ignoring unhandled discovery service event." << std::endl;
 				continue;
 			}
 
@@ -120,7 +130,7 @@ namespace tdrs {
 		}
 
 		std::cout << "DL: Leaving group ..." << std::endl;
-		_zyreListenerNode.leave("TDRS");
+		_zyreListenerNode.leave(_params->group);
 
 		std::cout << "DL: Stopping node ..." << std::endl;
 		_zyreListenerNode.stop();

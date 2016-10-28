@@ -37,11 +37,30 @@ $ make
 
 ## How can I run it?
 
+### Usage
+
+```
+Options::
+  --help                    show this usage information
+  --receiver-listen arg     set listener for receiver
+  --publisher-listen arg    set listener for publisher
+  --chain-link arg          add a chain link, specify one per link
+  --discovery               enable auto discovery of chain links
+  --discovery-interval arg  set the auto discovery interval (ms), default 1000
+  --discovery-interface arg set the network interface to be used for auto
+                            discovery, e.g. eth0
+  --discovery-port arg      set the UDP port to be used for auto discovery,
+                            default 5670
+  --discovery-key arg       set the auto discovery key, default 'TDRS'
+```
+
+### Single link
+
 ```bash
 $ ./tdrs --receiver-listen "tcp://*:19890" --publisher-listen "tcp://*:19891"
 ```
 
-## How can I scale it?
+## Static multi-link
 
 ```bash
 $ ./tdrs --receiver-listen "tcp://*:19790" --publisher-listen "tcp://*:19791" --chain-link "tcp://127.0.0.1:19891" --chain-link "tcp://127.0.0.1:19991"
@@ -53,6 +72,20 @@ $ ./tdrs --receiver-listen "tcp://*:19890" --publisher-listen "tcp://*:19891" --
 
 ```bash
 ./tdrs --receiver-listen "tcp://*:19990" --publisher-listen "tcp://*:19991" --chain-link "tcp://127.0.0.1:19891" --chain-link "tcp://127.0.0.1:19791"
+```
+
+### Dynamic multi-link
+
+```bash
+$ ./tdrs --receiver-listen "tcp://*:19790" --publisher-listen "tcp://*:19791" --discovery
+```
+
+```bash
+$ ./tdrs --receiver-listen "tcp://*:19890" --publisher-listen "tcp://*:19891" --discovery
+```
+
+```bash
+./tdrs --receiver-listen "tcp://*:19990" --publisher-listen "tcp://*:19991" --discovery
 ```
 
 ## What does `TDRS` stand for?

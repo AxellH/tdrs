@@ -1,4 +1,6 @@
 # TDRS
+[![Docker Automated build](https://img.shields.io/docker/automated/weltraum/tdrs.svg)](https://hub.docker.com/r/weltraum/tdrs/)
+
 Weltraum TDRS is a lightweight ZeroMQ-based event hub.
 
 ## A what?
